@@ -378,19 +378,19 @@ if (strpos($current_path, '/admin/') !== false) {
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/admin/questions/list.php">View Questions</a>
                         <a href="<?php echo $base_url; ?>/admin/questions/create.php">Create Question</a>
-                        <a href="<?php echo $base_url; ?>/admin/questions/archived_list.php">Archived Questions</a>
+                        <a href="<?php echo $base_url; ?>/admin/questions/list.php">Archived Questions</a>
                     </div>
                 </li>
                 <li class="dropdown">
                     <a href="#">Settings ▾</a>
                     <div class="dropdown-menu">
-                        <a href="<?php echo $base_url; ?>/admin/academic_year/list.php">Academic Years</a>
-                        <a href="<?php echo $base_url; ?>/admin/semesters/manage.php">Semesters</a>
+                        <a href="<?php echo $base_url; ?>/admin/academic_years/list.php">Academic Years</a>
+                        <a href="<?php echo $base_url; ?>/admin/semesters/index.php">Semesters</a>
                         <a href="<?php echo $base_url; ?>/admin/tokens/generate.php">Generate Tokens</a>
                     </div>
                 </li>
                 <li>
-                    <a href="<?php echo $base_url; ?>/admin/reports/system_overview.php">Reports</a>
+                    <a href="<?php echo $base_url; ?>/admin/reports/index.php">Reports</a>
                 </li>
 
             <?php elseif ($user_role == ROLE_HOD): ?>
@@ -398,8 +398,8 @@ if (strpos($current_path, '/admin/') !== false) {
                 <li class="dropdown">
                     <a href="#">Lecturers ▾</a>
                     <div class="dropdown-menu">
-                        <a href="<?php echo $base_url; ?>/hod/lecturers/assign.php">Assign Lecturer</a>
-                        <a href="<?php echo $base_url; ?>/hod/lecturers/view_assignments.php">View Assignments</a>
+                        <a href="<?php echo $base_url; ?>/hod/lecturers/assign_courses.php">Assign Lecturer</a>
+                        <a href="<?php echo $base_url; ?>/hod/lecturers/list.php">View Assignments</a>
                     </div>
                 </li>
                 <li>
@@ -408,7 +408,7 @@ if (strpos($current_path, '/admin/') !== false) {
                 <li class="dropdown">
                     <a href="#">Reports ▾</a>
                     <div class="dropdown-menu">
-                        <a href="<?php echo $base_url; ?>/hod/reports/department_overview.php">Department Overview</a>
+                        <a href="<?php echo $base_url; ?>/hod/reports/department_report.php">Department Overview</a>
                         <a href="<?php echo $base_url; ?>/hod/reports/course_report.php">Course Reports</a>
                         <a href="<?php echo $base_url; ?>/hod/reports/lecturer_report.php">Lecturer Reports</a>
                     </div>
@@ -463,13 +463,13 @@ if (strpos($current_path, '/admin/') !== false) {
             <?php elseif ($user_role == ROLE_SECRETARY): ?>
                 <!-- Secretary Menu -->
                 <li>
-                    <a href="<?php echo $base_url; ?>/secretary/view/courses.php">Courses</a>
+                    <a href="<?php echo $base_url; ?>/secretary/courses/list.php">Courses</a>
                 </li>
                 <li>
-                    <a href="<?php echo $base_url; ?>/secretary/view/students.php">Students</a>
+                    <a href="<?php echo $base_url; ?>/secretary/students/index.php">Students</a>
                 </li>
                 <li>
-                    <a href="<?php echo $base_url; ?>/secretary/view/reports.php">Reports</a>
+                    <a href="<?php echo $base_url; ?>/secretary/reports/index.php">Reports</a>
                 </li>
             <?php endif; ?>
         </ul>

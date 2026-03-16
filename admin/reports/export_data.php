@@ -2,12 +2,14 @@
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
+require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
 $page_title='Export Data';
-if(isset($_GET['action'])&&$_GET['action']=='download'){
-$type=$_GET['type']??'';
+if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['action'])&&$_POST['action']==='download'){
+if(!validate_csrf_token()){http_response_code(403);die('Invalid security token.');}
+$type=$_POST['type']??'';
 header('Content-Type:text/csv');
 header('Content-Disposition:attachment;filename="evaluation_export_'.date('Y-m-d').'.csv"');
 $output=fopen('php://output','w');
@@ -63,19 +65,19 @@ require_once '../../includes/header.php';
 <div class="export-icon">📋</div>
 <div class="export-title">Evaluations Export</div>
 <div class="export-desc">Download all completed evaluations with student and course information.</div>
-<a href="?action=download&type=evaluations" class="btn btn-primary">Download CSV</a>
+<form method="POST"><?php csrf_token_input();?><input type="hidden" name="action" value="download"><input type="hidden" name="type" value="evaluations"><button type="submit" class="btn btn-primary">Download CSV</button></form>
 </div>
 <div class="export-card">
 <div class="export-icon">🎫</div>
 <div class="export-title">Tokens Export</div>
 <div class="export-desc">Export all evaluation tokens including usage status and expiry dates.</div>
-<a href="?action=download&type=tokens" class="btn btn-primary">Download CSV</a>
+<form method="POST"><?php csrf_token_input();?><input type="hidden" name="action" value="download"><input type="hidden" name="type" value="tokens"><button type="submit" class="btn btn-primary">Download CSV</button></form>
 </div>
 <div class="export-card">
 <div class="export-icon">💬</div>
 <div class="export-title">Responses Export</div>
 <div class="export-desc">Download detailed response data with questions and ratings.</div>
-<a href="?action=download&type=responses" class="btn btn-primary">Download CSV</a>
+<form method="POST"><?php csrf_token_input();?><input type="hidden" name="action" value="download"><input type="hidden" name="type" value="responses"><button type="submit" class="btn btn-primary">Download CSV</button></form>
 </div>
 </div>
 </div>

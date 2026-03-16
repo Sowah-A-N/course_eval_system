@@ -88,9 +88,9 @@ while ($row = mysqli_fetch_assoc($result_depts)) {
 
 // Get recent user registrations
 $query_recent = "
-    SELECT f_name, l_name, email, role_id
+    SELECT f_name, l_name, email, role_id, date_created
     FROM user_details
-    ORDER BY role_id DESC
+    ORDER BY date_created DESC
     LIMIT 10
 ";
 $result_recent = mysqli_query($conn, $query_recent);

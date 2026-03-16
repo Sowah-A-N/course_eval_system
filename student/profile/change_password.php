@@ -126,9 +126,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 mysqli_stmt_bind_param($stmt_update, "si", $new_password_hash, $student_id);
 
                 if (mysqli_stmt_execute($stmt_update)) {
-                    $success = true;
                     $_SESSION['flash_message'] = 'Password changed successfully!';
                     $_SESSION['flash_type'] = 'success';
+                    header("Location: view.php");
+                    exit();
                 } else {
                     $errors[] = 'An error occurred while updating your password. Please try again.';
                 }

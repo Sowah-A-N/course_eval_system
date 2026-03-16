@@ -93,9 +93,9 @@ $query_departments = "
     ORDER BY d.dep_name
 ";
 
+$min_responses = MIN_RESPONSE_COUNT;
 $stmt_departments = mysqli_prepare($conn, $query_departments);
 mysqli_stmt_bind_param($stmt_departments, "i", $min_responses);
-$min_responses = MIN_RESPONSE_COUNT;
 mysqli_stmt_execute($stmt_departments);
 $result_departments = mysqli_stmt_get_result($stmt_departments);
 

@@ -64,7 +64,6 @@ $query_lecturers = "
 ";
 $stmt_lec = mysqli_prepare($conn, $query_lecturers);
 mysqli_stmt_bind_param($stmt_lec, "ii", $department_id, $role_lec);
-//$role_lec = ROLE_LECTURER;
 $role_lec = ROLE_ADVISOR;
 mysqli_stmt_execute($stmt_lec);
 $result_lec = mysqli_stmt_get_result($stmt_lec);

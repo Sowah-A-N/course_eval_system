@@ -28,6 +28,7 @@ define('ROLE_SECRETARY', 3);    // Department Secretary - read-only access
 define('ROLE_ADVISOR', 4);      // Class Advisor - class-level access
 define('ROLE_STUDENT', 5);      // Student - evaluation submission
 define('ROLE_QUALITY', 6);      // Quality Assurance - institution-wide reporting
+// Note: Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class
 
 /**
  * Role Names (for display purposes)
@@ -36,9 +37,9 @@ define('ROLE_NAMES', [
     ROLE_ADMIN => 'Administrator',
     ROLE_HOD => 'Head of Department',
     ROLE_SECRETARY => 'Secretary',
-    ROLE_ADVISOR => 'Advisor',
+    ROLE_ADVISOR => 'Advisor / Lecturer',
     ROLE_STUDENT => 'Student',
-    ROLE_QUALITY => 'Quality Assurance'
+    ROLE_QUALITY => 'Quality Assurance',
 ]);
 
 // ============================================

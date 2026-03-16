@@ -40,7 +40,6 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 // Build query for lecturers in department
 $where = ["u.department_id = ?", "u.role_id = ?"];
-//$params = [$department_id, ROLE_LECTURER];
 $params = [$department_id, ROLE_ADVISOR];
 $types = 'ii';
 

@@ -38,7 +38,7 @@ if(empty($username))$errors[]='Username required.';
 if(empty($password))$errors[]='Password required.';
 elseif(strlen($password)<PASSWORD_MIN_LENGTH)$errors[]='Password must be at least '.PASSWORD_MIN_LENGTH.' characters.';
 if($role_id==0)$errors[]='Please select a role.';
-if(in_array($role_id,[ROLE_STUDENT,ROLE_LECTURER,ROLE_HOD,ROLE_SECRETARY])&&$department_id==0)$errors[]='Department required for this role.';
+if(in_array($role_id,[ROLE_STUDENT,ROLE_ADVISOR,ROLE_HOD,ROLE_SECRETARY])&&$department_id==0)$errors[]='Department required for this role.';
 if($role_id==ROLE_STUDENT&&$level_id==0)$errors[]='Level required for students.';
 if($role_id==ROLE_STUDENT&&$class_id==0)$errors[]='Class required for students.';
 if(empty($errors)){
@@ -57,7 +57,7 @@ $class_id_value=$class_id>0?$class_id:null;
 $unique_id_value=!empty($unique_id)?$unique_id:null;
 $query="INSERT INTO user_details (username,password,email,f_name,l_name,unique_id,role_id,department_id,level_id,class_id,is_active,date_created) VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"ssssssiiii",$username,$password_hash,$email,$f_name,$l_name,$unique_id_value,$role_id,$dept_id_value,$level_id_value,$class_id_value,$is_active);
+mysqli_stmt_bind_param($stmt,"ssssssiiiii",$username,$password_hash,$email,$f_name,$l_name,$unique_id_value,$role_id,$dept_id_value,$level_id_value,$class_id_value,$is_active);
 if(mysqli_stmt_execute($stmt)){
 $_SESSION['flash_message']='User created successfully!';
 $_SESSION['flash_type']='success';
@@ -183,7 +183,7 @@ deptField.style.display='none';
 studentIdField.style.display='none';
 levelField.style.display='none';
 classField.style.display='none';
-if([2,3,4,5,7].includes(roleId)){deptField.style.display='block';}
+if([2,3,4,5].includes(roleId)){deptField.style.display='block';}
 if(roleId===5){
 studentIdField.style.display='block';
 levelField.style.display='block';
