@@ -28,7 +28,8 @@ define('ROLE_SECRETARY', 3);    // Department Secretary - read-only access
 define('ROLE_ADVISOR', 4);      // Class Advisor - class-level access
 define('ROLE_STUDENT', 5);      // Student - evaluation submission
 define('ROLE_QUALITY', 6);      // Quality Assurance - institution-wide reporting
-// Note: Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class
+// Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class
+define('ROLE_LECTURER', ROLE_ADVISOR); // Alias so existing code referencing ROLE_LECTURER still works
 
 /**
  * Role Names (for display purposes)

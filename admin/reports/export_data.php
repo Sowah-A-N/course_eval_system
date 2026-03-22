@@ -14,22 +14,22 @@ header('Content-Type:text/csv');
 header('Content-Disposition:attachment;filename="evaluation_export_'.date('Y-m-d').'.csv"');
 $output=fopen('php://output','w');
 if($type=='evaluations'){
-fputcsv($output,['Evaluation ID','Student ID','Course Code','Course Name','Lecturer','Department','Date','Status']);
-$query="SELECT e.evaluation_id,u.unique_id,c.course_code,c.name,l.f_name,l.l_name,d.dep_name,e.date_submitted,et.is_used FROM evaluations e JOIN evaluation_tokens et ON e.token_id=et.token_id JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN user_details l ON et.lecturer_user_id=l.user_id LEFT JOIN department d ON c.department_id=d.t_id ORDER BY e.date_submitted DESC";
+fputcsv($output,['Evaluation ID','Student ID','Course Code','Course Name','Lecturer(s)','Department','Date','Status']);
+$query="SELECT e.evaluation_id,u.unique_id,c.course_code,c.name,GROUP_CONCAT(DISTINCT CONCAT(l.f_name,' ',l.l_name) SEPARATOR '; ')as lecturer_name,d.dep_name,e.submitted_at,et.is_used FROM evaluations e JOIN evaluation_tokens et ON e.token=et.token JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.is_active=1 LEFT JOIN user_details l ON cl.lecturer_user_id=l.user_id LEFT JOIN department d ON c.department_id=d.t_id GROUP BY e.evaluation_id,u.unique_id,c.course_code,c.name,d.dep_name,e.submitted_at,et.is_used ORDER BY e.submitted_at DESC";
 $result=mysqli_query($conn,$query);
 while($row=mysqli_fetch_assoc($result)){
-fputcsv($output,[$row['evaluation_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['f_name'].' '.$row['l_name'],$row['dep_name'],$row['date_submitted'],$row['is_used']?'Used':'Unused']);
+fputcsv($output,[$row['evaluation_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['lecturer_name'],$row['dep_name'],$row['submitted_at'],$row['is_used']?'Used':'Unused']);
 }
 }elseif($type=='tokens'){
-fputcsv($output,['Token ID','Student ID','Course Code','Course Name','Department','Generated Date','Used','Expires']);
-$query="SELECT et.token_id,u.unique_id,c.course_code,c.name,d.dep_name,et.generated_at,et.is_used,et.expires_at FROM evaluation_tokens et JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN department d ON c.department_id=d.t_id ORDER BY et.generated_at DESC";
+fputcsv($output,['Token ID','Student ID','Course Code','Course Name','Department','Created Date','Used']);
+$query="SELECT et.token_id,u.unique_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used FROM evaluation_tokens et JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN department d ON c.department_id=d.t_id ORDER BY et.created_at DESC";
 $result=mysqli_query($conn,$query);
 while($row=mysqli_fetch_assoc($result)){
-fputcsv($output,[$row['token_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['dep_name'],$row['generated_at'],$row['is_used']?'Yes':'No',$row['expires_at']]);
+fputcsv($output,[$row['token_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['dep_name'],$row['created_at'],$row['is_used']?'Yes':'No']);
 }
 }elseif($type=='responses'){
 fputcsv($output,['Response ID','Evaluation ID','Question','Rating']);
-$query="SELECT er.response_id,er.evaluation_id,eq.question_text,er.rating FROM evaluation_responses er JOIN evaluation_questions eq ON er.question_id=eq.question_id ORDER BY er.evaluation_id,eq.question_order";
+$query="SELECT r.id as response_id,r.evaluation_id,eq.question_text,r.response_value as rating FROM responses r JOIN evaluation_questions eq ON r.question_id=eq.question_id ORDER BY r.evaluation_id,eq.display_order";
 $result=mysqli_query($conn,$query);
 while($row=mysqli_fetch_assoc($result)){
 fputcsv($output,[$row['response_id'],$row['evaluation_id'],$row['question_text'],$row['rating']]);

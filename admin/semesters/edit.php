@@ -20,20 +20,21 @@ if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid token.';
 $semester_name=trim($_POST['semester_name']??'');
 $semester_value=intval($_POST['semester_value']??0);
-if(empty($semester_name))$errors[]='Semester name required.';
+$is_active=isset($_POST['is_active'])?1:0;
+if(!in_array($semester_name,['First','Second']))$errors[]='Semester name must be First or Second.';
 if($semester_value==0)$errors[]='Semester value required.';
 if(empty($errors)){
-$query_check="SELECT semester_id FROM semesters WHERE semester_value=? AND semester_id!=?";
+$query_check="SELECT semester_id FROM semesters WHERE academic_year_id=? AND semester_name=? AND semester_id!=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
-mysqli_stmt_bind_param($stmt_check,"ii",$semester_value,$semester_id);
+mysqli_stmt_bind_param($stmt_check,"isi",$semester['academic_year_id'],$semester_name,$semester_id);
 mysqli_stmt_execute($stmt_check);
-if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Semester value exists.';
+if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='That semester name already exists for this academic year.';
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="UPDATE semesters SET semester_name=?,semester_value=? WHERE semester_id=?";
+$query="UPDATE semesters SET semester_name=?,semester_value=?,is_active=? WHERE semester_id=?";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"sii",$semester_name,$semester_value,$semester_id);
+mysqli_stmt_bind_param($stmt,"siii",$semester_name,$semester_value,$is_active,$semester_id);
 if(mysqli_stmt_execute($stmt)){
 $_SESSION['flash_message']='Semester updated!';
 $_SESSION['flash_type']='success';
@@ -68,11 +69,20 @@ require_once '../../includes/header.php';
 <?php csrf_token_input();?>
 <div class="form-group">
 <label class="form-label required">Semester Name</label>
-<input type="text" name="semester_name" class="form-input" value="<?php echo htmlspecialchars($semester['semester_name']);?>" required>
+<select name="semester_name" class="form-input" required>
+<option value="First" <?php echo $semester['semester_name']==='First'?'selected':'';?>>First</option>
+<option value="Second" <?php echo $semester['semester_name']==='Second'?'selected':'';?>>Second</option>
+</select>
 </div>
 <div class="form-group">
 <label class="form-label required">Semester Value</label>
-<input type="number" name="semester_value" class="form-input" value="<?php echo $semester['semester_value'];?>" min="1" required>
+<select name="semester_value" class="form-input" required>
+<option value="1" <?php echo $semester['semester_value']==1?'selected':'';?>>1 (First)</option>
+<option value="2" <?php echo $semester['semester_value']==2?'selected':'';?>>2 (Second)</option>
+</select>
+</div>
+<div class="form-group">
+<label><input type="checkbox" name="is_active" <?php echo $semester['is_active']?'checked':'';?>> Active</label>
 </div>
 <button type="submit" class="btn btn-primary">Update Semester</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

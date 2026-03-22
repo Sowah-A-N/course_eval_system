@@ -55,7 +55,7 @@ $class_id_value=$class_id>0?$class_id:null;
 $unique_id_value=!empty($unique_id)?$unique_id:null;
 $query="UPDATE user_details SET f_name=?,l_name=?,email=?,unique_id=?,role_id=?,department_id=?,level_id=?,class_id=?,is_active=? WHERE user_id=?";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"ssssiiiii",$f_name,$l_name,$email,$unique_id_value,$role_id,$dept_id_value,$level_id_value,$class_id_value,$is_active,$user_id);
+mysqli_stmt_bind_param($stmt,"ssssiiiiii",$f_name,$l_name,$email,$unique_id_value,$role_id,$dept_id_value,$level_id_value,$class_id_value,$is_active,$user_id);
 if(mysqli_stmt_execute($stmt)){
 $_SESSION['flash_message']='User updated!';
 $_SESSION['flash_type']='success';
@@ -166,7 +166,7 @@ deptField.style.display='none';
 studentIdField.style.display='none';
 levelField.style.display='none';
 classField.style.display='none';
-if([2,3,4,5,7].includes(roleId)){deptField.style.display='block';}
+if([2,3,4,5,6].includes(roleId)){deptField.style.display='block';}
 if(roleId===5){
 studentIdField.style.display='block';
 levelField.style.display='block';

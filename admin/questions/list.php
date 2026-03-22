@@ -14,7 +14,7 @@ $where[]="is_active=1";
 $where[]="is_active=0";
 }
 $where_clause=implode(' AND ',$where);
-$query="SELECT * FROM evaluation_questions WHERE $where_clause ORDER BY /* question_order,*/ question_id";
+$query="SELECT * FROM evaluation_questions WHERE $where_clause ORDER BY display_order, question_id";
 $result=mysqli_query($conn,$query);
 $questions=[];
 while($row=mysqli_fetch_assoc($result))$questions[]=$row;
@@ -71,7 +71,7 @@ require_once '../../includes/header.php';
 </div>
 </div>
 <div class="info-box">
-<strong>ℹ️ About Questions:</strong> Active questions appear in student evaluations. Inactive questions are hidden but preserved for historical data. Questions are displayed in the order specified.
+<strong>ℹ️ About Questions:</strong> Active questions appear in student evaluations. Inactive questions are hidden but preserved for historical data. Use the Reorder button to set display order.
 </div>
 <div class="top-actions">
 <div>
@@ -99,7 +99,7 @@ require_once '../../includes/header.php';
 <?php foreach($questions as $question): ?>
 <div class="question-item">
 <div class="question-header">
-<!--div class="question-order">#<?php echo $question['question_order'];?></div-->
+<div class="question-order">#<?php echo $question['display_order'];?></div>
 <div class="question-text"><?php echo htmlspecialchars($question['question_text']);?></div>
 </div>
 <div class="question-meta">

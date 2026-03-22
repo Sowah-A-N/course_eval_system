@@ -24,7 +24,7 @@ $is_active=isset($_POST['is_active'])?1:0;
 if(empty($question_text))$errors[]='Question text required.';
 if($question_order<=0)$errors[]='Question order must be positive.';
 if(empty($errors)){
-$query="UPDATE evaluation_questions SET question_text=?,question_order=?,is_active=? WHERE question_id=?";
+$query="UPDATE evaluation_questions SET question_text=?,display_order=?,is_active=? WHERE question_id=?";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"siii",$question_text,$question_order,$is_active,$question_id);
 if(mysqli_stmt_execute($stmt)){
@@ -67,7 +67,7 @@ require_once '../../includes/header.php';
 </div>
 <div class="form-group">
 <label class="form-label required">Display Order</label>
-<input type="number" name="question_order" class="form-input" value="<?php echo $question['question_order'];?>" min="1" required>
+<input type="number" name="question_order" class="form-input" value="<?php echo $question['display_order'];?>" min="1" required>
 </div>
 <div class="form-group">
 <label>
