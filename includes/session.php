@@ -101,8 +101,11 @@ function check_login($redirect = true) {
     // Check if user_id exists in session
     if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
         if ($redirect) {
-            // Store current page for redirect after login
-            $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
+            // Store current page for redirect after login (only safe relative paths)
+            $uri = $_SERVER['REQUEST_URI'] ?? '';
+            if (strpos($uri, '/') === 0 && strpos($uri, '//') !== 0 && strpos($uri, '..') === false) {
+                $_SESSION['redirect_after_login'] = $uri;
+            }
 
             // Redirect to login
             header("Location: " . get_base_url() . "/login.php");
@@ -287,7 +290,7 @@ function logout_user() {
         setcookie(
             session_name(),
             '',
-            time() - 42000,
+            time() - 3600,
             $params["path"],
             $params["domain"],
             $params["secure"],

@@ -1,0 +1,79 @@
+# ============================================================
+# Course Evaluation System — Apache Security Configuration
+# ============================================================
+
+# Force HTTPS in production (comment out if running on HTTP locally)
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ============================================================
+# Directory listing — never expose file trees
+# ============================================================
+Options -Indexes
+
+# ============================================================
+# Hide server version information
+# ============================================================
+ServerSignature Off
+
+# ============================================================
+# Block direct access to sensitive directories
+# ============================================================
+
+# config/ — database credentials, constants
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block direct HTTP requests to config/ and includes/
+    RewriteRule ^config/    - [F,L]
+    RewriteRule ^includes/  - [F,L]
+
+    # Block direct access to database migration files
+    RewriteRule ^database/  - [F,L]
+</IfModule>
+
+# ============================================================
+# Block access to sensitive file types
+# ============================================================
+<FilesMatch "\.(sql|log|bak|env|ini|sh|bash|md|git)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ============================================================
+# Security headers (complement PHP header() calls)
+# ============================================================
+<IfModule mod_headers.c>
+    # Prevent MIME-type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Clickjacking protection
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Basic XSS filter (legacy browsers)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Remove PHP version disclosure
+    Header unset X-Powered-By
+
+    # Referrer policy — don't leak URL to third parties
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ============================================================
+# PHP settings (if mod_php / .htaccess overrides are allowed)
+# ============================================================
+<IfModule mod_php.c>
+    # Prevent PHP errors from leaking to clients in production
+    php_flag  display_errors        Off
+    php_flag  display_startup_errors Off
+    php_value error_reporting       0
+
+    # Session hardening
+    php_flag  session.cookie_httponly On
+    php_value session.cookie_samesite Lax
+
+    # Disable dangerous functions
+    # php_value disable_functions "exec,passthru,shell_exec,system,proc_open,popen"
+</IfModule>
