@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -36,6 +37,7 @@ $query="UPDATE semesters SET semester_name=?,semester_value=?,is_active=? WHERE 
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"siii",$semester_name,$semester_value,$is_active,$semester_id);
 if(mysqli_stmt_execute($stmt)){
+log_audit($conn,$_SESSION['user_id'],'SEMESTER_UPDATE','semesters',$semester_id,['semester_name'=>$semester['semester_name'],'semester_value'=>$semester['semester_value'],'is_active'=>$semester['is_active']],['semester_name'=>$semester_name,'semester_value'=>$semester_value,'is_active'=>$is_active]);
 $_SESSION['flash_message']='Semester updated!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");

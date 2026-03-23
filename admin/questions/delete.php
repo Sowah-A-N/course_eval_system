@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -33,6 +34,7 @@ $query="DELETE FROM evaluation_questions WHERE question_id=?";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"i",$question_id);
 if(mysqli_stmt_execute($stmt)){
+log_audit($conn,$_SESSION['user_id'],'QUESTION_DELETE','evaluation_questions',$question_id,['question_text'=>$question['question_text']],null);
 $_SESSION['flash_message']='Question deleted successfully!';
 $_SESSION['flash_type']='success';
 }else{
