@@ -14,9 +14,10 @@ Options -Indexes
 
 # ============================================================
 # Hide server version information
-# ============================================================
-ServerSignature Off
-
+# NOTE: ServerSignature and ServerTokens can only be set in
+# httpd.conf / VirtualHost — not in .htaccess.
+# Set "ServerSignature Off" and "ServerTokens Prod" in WAMP's
+# httpd.conf instead.
 # ============================================================
 # Block direct access to sensitive directories
 # ============================================================
