@@ -24,14 +24,14 @@ mysqli_stmt_close($stmt_courses);
 $report_data=null;
 if($filter_course>0){
 $min_responses=MIN_RESPONSE_COUNT;
-$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,COUNT(DISTINCT et.token_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id LEFT JOIN evaluations e ON et.token_id=e.token_id WHERE c.id=? GROUP BY c.id";
+$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,COUNT(DISTINCT et.token_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id LEFT JOIN evaluations e ON et.token=e.token WHERE c.id=? GROUP BY c.id";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"i",$filter_course);
 mysqli_stmt_execute($stmt);
 $report_data=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if($report_data&&$report_data['response_count']>=$min_responses){
-$query_ratings="SELECT eq.question_text,AVG(er.rating)as avg_rating,COUNT(er.rating)as rating_count FROM evaluation_responses er JOIN evaluation_questions eq ON er.question_id=eq.question_id JOIN evaluations e ON er.evaluation_id=e.evaluation_id JOIN evaluation_tokens et ON e.token_id=et.token_id WHERE et.course_id=? GROUP BY er.question_id,eq.question_text ORDER BY eq.question_order";
+$query_ratings="SELECT eq.question_text,AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating,COUNT(r.id)as rating_count FROM responses r JOIN evaluation_questions eq ON r.question_id=eq.question_id JOIN evaluations e ON r.evaluation_id=e.evaluation_id JOIN evaluation_tokens et ON e.token=et.token WHERE et.course_id=? GROUP BY r.question_id,eq.question_text ORDER BY eq.display_order";
 $stmt_ratings=mysqli_prepare($conn,$query_ratings);
 mysqli_stmt_bind_param($stmt_ratings,"i",$filter_course);
 mysqli_stmt_execute($stmt_ratings);

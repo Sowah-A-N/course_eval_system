@@ -15,8 +15,20 @@ mysqli_stmt_execute($stmt);
 $question=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if(!$question){$_SESSION['flash_message']='Question not found.';header("Location:list.php");exit();}
+// Check how many historical responses reference this question
+$stmt_rc=mysqli_prepare($conn,"SELECT COUNT(*) AS cnt FROM responses WHERE question_id=?");
+mysqli_stmt_bind_param($stmt_rc,"i",$question_id);
+mysqli_stmt_execute($stmt_rc);
+$response_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_rc))['cnt'];
+mysqli_stmt_close($stmt_rc);
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
+if($response_count>0){
+$_SESSION['flash_message']='Cannot delete: this question has '.$response_count.' recorded response(s). Deactivate it instead.';
+$_SESSION['flash_type']='error';
+header("Location:list.php");
+exit();
+}
 $query="DELETE FROM evaluation_questions WHERE question_id=?";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"i",$question_id);
@@ -50,11 +62,16 @@ require_once '../../includes/header.php';
 <?php echo htmlspecialchars($question['question_text']);?>
 </div>
 </div>
-<p style="color:#dc3545;font-weight:600">This action cannot be undone! Any responses to this question will be lost.</p>
+<?php if($response_count>0): ?>
+<p style="color:#dc3545;font-weight:600">Cannot delete: <?php echo $response_count;?> recorded response(s) exist for this question. Deactivate it instead to hide it from future evaluations.</p>
+<a href="list.php" class="btn btn-secondary">Back to List</a>
+<?php else: ?>
+<p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>
 <form method="POST">
 <?php csrf_token_input();?>
 <button type="submit" class="btn btn-danger">Yes, Delete Question</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>
 </form>
+<?php endif;?>
 </div>
 <?php require_once '../../includes/footer.php';?>

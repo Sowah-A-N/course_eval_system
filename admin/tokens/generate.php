@@ -80,7 +80,7 @@ continue;
 mysqli_stmt_close($stmt_check);
 }
 $token=bin2hex(random_bytes(TOKEN_LENGTH));
-$query_insert="INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,generated_at,is_used,expires_at) VALUES (?,?,?,?,?,NOW(),0,DATE_ADD(NOW(),INTERVAL 90 DAY))";
+$query_insert="INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,is_used) VALUES (?,?,?,?,?,0)";
 $stmt_insert=mysqli_prepare($conn,$query_insert);
 mysqli_stmt_bind_param($stmt_insert,"siiii",$token,$student_id,$course_id,$active_period['academic_year_id'],$active_period['semester_id']);
 if(mysqli_stmt_execute($stmt_insert)){
@@ -210,4 +210,4 @@ You must configure an active academic year and semester before generating tokens
 </div>
 <?php endif;?>
 </div>
-<?php require_once '../../includes/header.php';?>
+<?php require_once '../../includes/footer.php';?>

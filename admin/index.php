@@ -51,7 +51,7 @@ $query_stats = "
 
 $stmt_stats = mysqli_prepare($conn, $query_stats);
 $role_student = ROLE_STUDENT;
-$role_lecturer = ROLE_ADVISOR;
+$role_lecturer = ROLE_ADVISOR; // Advisors/Lecturers share role_id 4
 mysqli_stmt_bind_param($stmt_stats, "ii", $role_student, $role_lecturer);
 mysqli_stmt_execute($stmt_stats);
 $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_stats));
@@ -88,9 +88,9 @@ while ($row = mysqli_fetch_assoc($result_depts)) {
 
 // Get recent user registrations
 $query_recent = "
-    SELECT f_name, l_name, email, role_id, date_created
+    SELECT f_name, l_name, email, role_id, created_at
     FROM user_details
-    ORDER BY date_created DESC
+    ORDER BY created_at DESC
     LIMIT 10
 ";
 $result_recent = mysqli_query($conn, $query_recent);
@@ -317,7 +317,7 @@ require_once '../includes/header.php';
     <div class="stat-card">
         <div class="stat-icon">👨‍🏫</div>
         <div class="stat-value"><?php echo $stats['total_lecturers']; ?></div>
-        <div class="stat-label">Lecturers</div>
+        <div class="stat-label">Advisors / Lecturers</div>
     </div>
     <div class="stat-card">
         <div class="stat-icon">🏢</div>
@@ -379,7 +379,7 @@ require_once '../includes/header.php';
         <div class="action-title">Generate Tokens</div>
         <div class="action-desc">Create evaluation tokens for students</div>
     </a>
-    <a href="reports/system_overview.php" class="action-card">
+    <a href="reports/index.php" class="action-card">
         <div class="action-icon">📊</div>
         <div class="action-title">System Reports</div>
         <div class="action-desc">View institution-wide analytics</div>
@@ -426,7 +426,7 @@ require_once '../includes/header.php';
                 </div>
                 <div class="row-value">
                     <?php
-                        $dateCreated = $user['date_created'] ?? null;
+                        $dateCreated = $user['created_at'] ?? null;
                         echo $dateCreated ? date('M d, Y', strtotime($dateCreated)) : 'N/A';
                     ?>
                 </div>
