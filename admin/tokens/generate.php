@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -91,6 +92,7 @@ mysqli_stmt_close($stmt_insert);
 }
 mysqli_commit($conn);
 $success=true;
+log_audit($conn,$_SESSION['user_id'],'TOKEN_GENERATE','evaluation_tokens',null,null,['count'=>$generated_count,'department_id'=>$department_id,'level_id'=>$level_id,'academic_year_id'=>$active_period['academic_year_id'],'semester_id'=>$active_period['semester_id']]);
 $_SESSION['flash_message']="Successfully generated $generated_count evaluation tokens!";
 $_SESSION['flash_type']='success';
 }

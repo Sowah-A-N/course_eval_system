@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -42,6 +43,8 @@ $query="INSERT INTO courses (course_code,name,department_id,level_id,semester_id
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"ssiii",$course_code,$name,$department_id,$level_id,$semester_id);
 if(mysqli_stmt_execute($stmt)){
+$new_course_id=mysqli_insert_id($conn);
+log_audit($conn,$_SESSION['user_id'],'COURSE_CREATE','courses',$new_course_id,null,['course_code'=>$course_code,'name'=>$name,'department_id'=>$department_id]);
 $_SESSION['flash_message']='Course created successfully!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");

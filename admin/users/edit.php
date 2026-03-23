@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -57,6 +58,7 @@ $query="UPDATE user_details SET f_name=?,l_name=?,email=?,unique_id=?,role_id=?,
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"ssssiiiiii",$f_name,$l_name,$email,$unique_id_value,$role_id,$dept_id_value,$level_id_value,$class_id_value,$is_active,$user_id);
 if(mysqli_stmt_execute($stmt)){
+log_audit($conn,$_SESSION['user_id'],'USER_UPDATE','user_details',$user_id,['f_name'=>$user['f_name'],'l_name'=>$user['l_name'],'email'=>$user['email'],'role_id'=>$user['role_id']],['f_name'=>$f_name,'l_name'=>$l_name,'email'=>$email,'role_id'=>$role_id]);
 $_SESSION['flash_message']='User updated!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");

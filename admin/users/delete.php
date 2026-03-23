@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -51,6 +52,7 @@ $query="DELETE FROM user_details WHERE user_id=?";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"i",$user_id);
 if(mysqli_stmt_execute($stmt)){
+log_audit($conn,$_SESSION['user_id'],'USER_DELETE','user_details',$user_id,['username'=>$user['username'],'email'=>$user['email'],'role_id'=>$user['role_id']],null);
 $_SESSION['flash_message']='User deleted successfully!';
 $_SESSION['flash_type']='success';
 }else{
