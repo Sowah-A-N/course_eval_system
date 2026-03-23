@@ -10,21 +10,21 @@ $page_title='Add New Academic Year';
 $errors=[];
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid security token.';
-$year_label=trim($_POST['year_label']??'');
-$year_start=$_POST['year_start']??'';
-$year_end=$_POST['year_end']??'';
-if(empty($year_label))$errors[]='Year label required.';
-if(empty($year_start))$errors[]='Start date required.';
-if(empty($year_end))$errors[]='End date required.';
-if(!empty($year_start)&&!empty($year_end)){
-if(strtotime($year_end)<=strtotime($year_start))$errors[]='End date must be after start date.';
+$start_year=intval($_POST['start_year']??0);
+if($start_year<2000||$start_year>2100)$errors[]='Please enter a valid 4-digit start year (e.g. 2024).';
+if(empty($errors)){
+// end_year and year_label are GENERATED columns — insert start_year only
+$stmt_check=mysqli_prepare($conn,"SELECT academic_year_id FROM academic_year WHERE start_year=?");
+mysqli_stmt_bind_param($stmt_check,"i",$start_year);
+mysqli_stmt_execute($stmt_check);
+if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='An academic year starting in '.$start_year.' already exists.';
+mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="INSERT INTO academic_year (year_label,year_start,year_end) VALUES (?,?,?)";
-$stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"sss",$year_label,$year_start,$year_end);
+$stmt=mysqli_prepare($conn,"INSERT INTO academic_year (start_year) VALUES (?)");
+mysqli_stmt_bind_param($stmt,"i",$start_year);
 if(mysqli_stmt_execute($stmt)){
-$_SESSION['flash_message']='Academic year created successfully!';
+$_SESSION['flash_message']='Academic year '.$start_year.'/'.($start_year+1).' created successfully!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");
 exit();
@@ -51,7 +51,7 @@ require_once '../../includes/header.php';
 <p>Create a new academic year period</p>
 </div>
 <div class="info-box">
-<strong>💡 Example:</strong> Academic year "2024/2025" typically runs from September 2024 to August 2025
+<strong>💡 Note:</strong> Enter the starting year only. The system will automatically generate the year label (e.g. entering <strong>2024</strong> creates academic year <strong>2024/2025</strong>).
 </div>
 <?php if(!empty($errors)): ?>
 <div class="alert-error">
@@ -67,16 +67,9 @@ require_once '../../includes/header.php';
 <form method="POST">
 <?php csrf_token_input();?>
 <div class="form-group">
-<label class="form-label required">Year Label</label>
-<input type="text" name="year_label" class="form-input" value="<?php echo htmlspecialchars($_POST['year_label']??'');?>" placeholder="e.g., 2024/2025" required>
-</div>
-<div class="form-group">
-<label class="form-label required">Start Date</label>
-<input type="date" name="year_start" class="form-input" value="<?php echo htmlspecialchars($_POST['year_start']??'');?>" required>
-</div>
-<div class="form-group">
-<label class="form-label required">End Date</label>
-<input type="date" name="year_end" class="form-input" value="<?php echo htmlspecialchars($_POST['year_end']??'');?>" required>
+<label class="form-label required">Start Year</label>
+<input type="number" name="start_year" class="form-input" value="<?php echo htmlspecialchars($_POST['start_year']??date('Y'));?>" min="2000" max="2100" placeholder="e.g., 2024" required>
+<small style="color:#666">The end year (<?php echo date('Y')+1;?>) and label are generated automatically.</small>
 </div>
 <button type="submit" class="btn btn-primary">Create Academic Year</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

@@ -16,7 +16,7 @@
  *   $new_values  - Associative array of values after the change (or null)
  */
 
-if (!defined('AUDIT_LOGIN')) {
+if (!defined('ROLE_ADMIN')) {
     require_once dirname(__DIR__) . '/config/constants.php';
 }
 
@@ -33,6 +33,9 @@ function log_audit(
     $user_agent = isset($_SERVER['HTTP_USER_AGENT'])
         ? substr($_SERVER['HTTP_USER_AGENT'], 0, 255)
         : null;
+
+    // audit_logs.user_id is NOT NULL — use 0 as sentinel for anonymous/pre-auth actions
+    $user_id = $user_id !== null ? (int)$user_id : 0;
 
     $old_json = $old_values !== null ? json_encode($old_values) : null;
     $new_json = $new_values !== null ? json_encode($new_values) : null;

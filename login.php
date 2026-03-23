@@ -9,8 +9,8 @@
  * Features:
  * - Username or email login
  * - Password verification
- * - CSRF protection
- * - Login attempt tracking
+ * - CSRF protection (timing-safe via hash_equals in csrf.php)
+ * - Login attempt tracking (IP-based, stored in login_attempts table)
  * - Account lockout after failed attempts
  * - Role-based redirection
  * - Session security
@@ -20,42 +20,23 @@
 require_once 'config/database.php';
 require_once 'config/constants.php';
 require_once 'includes/session.php';
+require_once 'includes/csrf.php';
+require_once 'includes/audit.php';
 
 // Start secure session
 start_secure_session();
 
 // If user is already logged in, redirect to appropriate dashboard
 if (isset($_SESSION['user_id']) && isset($_SESSION['role_id'])) {
-    // Redirect based on role
     switch ($_SESSION['role_id']) {
-        case ROLE_ADMIN:
-            header("Location: admin/index.php");
-            exit();
-        case ROLE_HOD:
-            header("Location: hod/index.php");
-            exit();
-        case ROLE_SECRETARY:
-            header("Location: secretary/index.php");
-            exit();
-        case ROLE_ADVISOR:
-            header("Location: advisor/index.php");
-            exit();
-        case ROLE_STUDENT:
-            header("Location: student/index.php");
-            exit();
-        case ROLE_QUALITY:
-            header("Location: quality/index.php");
-            exit();
-        default:
-            // Unknown role, logout
-            session_destroy();
-            break;
+        case ROLE_ADMIN:     header("Location: admin/index.php");     exit();
+        case ROLE_HOD:       header("Location: hod/index.php");       exit();
+        case ROLE_SECRETARY: header("Location: secretary/index.php"); exit();
+        case ROLE_ADVISOR:   header("Location: advisor/index.php");   exit();
+        case ROLE_STUDENT:   header("Location: student/index.php");   exit();
+        case ROLE_QUALITY:   header("Location: quality/index.php");   exit();
+        default:             session_destroy(); break;
     }
-}
-
-// Generate CSRF token if not exists
-if (!isset($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 // Initialize variables
@@ -65,144 +46,144 @@ $username_email = '';
 // Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    // Validate CSRF token (timing-safe hash_equals comparison via csrf.php)
+    if (!validate_csrf_token()) {
         $error = MSG_ERROR_INVALID_CSRF;
     } else {
 
         // Get and sanitize inputs
-        $username_email = trim($_POST['username_email']);
-        $password = $_POST['password'];
+        $username_email = trim($_POST['username_email'] ?? '');
+        $password = $_POST['password'] ?? '';
 
         // Validate required fields
         if (empty($username_email) || empty($password)) {
             $error = MSG_ERROR_REQUIRED_FIELDS;
         } else {
 
-            // Check login attempts (simple implementation without database tracking)
-            // For production, implement proper login attempt tracking in database
+            // IP-based login rate limiting
+            $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+            $stmt_check = mysqli_prepare($conn,
+                "SELECT COUNT(*) AS attempt_count FROM login_attempts
+                 WHERE ip_address = ? AND attempted_at > DATE_SUB(NOW(), INTERVAL ? SECOND)");
+            mysqli_stmt_bind_param($stmt_check, 'si', $ip, LOGIN_LOCKOUT_TIME);
+            mysqli_stmt_execute($stmt_check);
+            $attempt_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_check));
+            mysqli_stmt_close($stmt_check);
 
-            // Prepare query to find user by username or email
-            $query = "SELECT
-                        user_id,
-                        username,
-                        email,
-                        password,
-                        role_id,
-                        department_id,
-                        class_id,
-                        level_id,
-                        f_name,
-                        l_name,
-                        is_active
-                      FROM " . TABLE_USER_DETAILS . "
-                      WHERE (username = ? OR email = ?)
-                      LIMIT 1";
-
-            $stmt = mysqli_prepare($conn, $query);
-
-            if ($stmt) {
-                // Bind parameters
-                mysqli_stmt_bind_param($stmt, "ss", $username_email, $username_email);
-
-                // Execute query
-                mysqli_stmt_execute($stmt);
-
-                // Get result
-                $result = mysqli_stmt_get_result($stmt);
-
-                // Check if user exists
-                if ($user = mysqli_fetch_assoc($result)) {
-
-                    // Check if account is active
-                    if ($user['is_active'] != 1) {
-                        $error = "Your account has been deactivated. Please contact the administrator.";
-                    } else {
-
-                        // Verify password
-                        if (password_verify($password, $user['password'])) {
-
-                            // Password is correct - Set session variables
-                            $_SESSION['user_id'] = (int)$user['user_id'];
-                            $_SESSION['role_id'] = (int)$user['role_id'];  // Convert to integer!
-                            $_SESSION['department_id'] = $user['department_id'] ? (int)$user['department_id'] : null;
-                            $_SESSION['class_id'] = $user['class_id'] ? (int)$user['class_id'] : null;
-                            $_SESSION['level_id'] = $user['level_id'] ? (int)$user['level_id'] : null;
-                            $_SESSION['username'] = $user['username'];
-                            $_SESSION['email'] = $user['email'];
-                            $_SESSION['full_name'] = $user['f_name'] . ' ' . $user['l_name'];
-                            $_SESSION['last_activity'] = time();
-                            $_SESSION['login_time'] = time();
-
-                            // Regenerate session ID for security
-                            session_regenerate_id(true);
-
-                            // Log successful login (optional - requires audit_logs implementation)
-                            // log_audit($conn, $user['user_id'], AUDIT_LOGIN, null, null, null, null);
-
-                            // Redirect to the page the user originally tried to access,
-                            // if it is a safe relative path within this application.
-                            if (
-                                isset($_SESSION['redirect_after_login']) &&
-                                !empty($_SESSION['redirect_after_login']) &&
-                                strpos($_SESSION['redirect_after_login'], '://') === false &&
-                                strpos($_SESSION['redirect_after_login'], '//') !== 0
-                            ) {
-                                $redirect_url = $_SESSION['redirect_after_login'];
-                                unset($_SESSION['redirect_after_login']);
-                                header("Location: " . $redirect_url);
-                                exit();
-                            }
-                            unset($_SESSION['redirect_after_login']);
-
-                            // Default: redirect based on role
-                            switch ($user['role_id']) {
-                                case ROLE_ADMIN:
-                                    header("Location: admin/index.php");
-                                    exit();
-                                case ROLE_HOD:
-                                    header("Location: hod/index.php");
-                                    exit();
-                                case ROLE_SECRETARY:
-                                    header("Location: secretary/index.php");
-                                    exit();
-                                case ROLE_ADVISOR:
-                                    header("Location: advisor/index.php");
-                                    exit();
-                                case ROLE_STUDENT:
-                                    header("Location: student/index.php");
-                                    exit();
-                                case ROLE_QUALITY:
-                                    header("Location: quality/index.php");
-                                    exit();
-                                default:
-                                    $error = "Invalid user role. Please contact administrator.";
-                            }
-                        } else {
-                            // Password is incorrect
-                            $error = MSG_ERROR_INVALID_LOGIN;
-
-                            // Log failed login attempt (optional)
-                            // log_audit($conn, null, AUDIT_LOGIN_FAILED, null, null, null, null);
-                        }
-                    }
-                } else {
-                    // User not found
-                    $error = MSG_ERROR_INVALID_LOGIN;
-                }
-
-                // Close statement
-                mysqli_stmt_close($stmt);
+            if ($attempt_row && (int)$attempt_row['attempt_count'] >= MAX_LOGIN_ATTEMPTS) {
+                $error = MSG_ERROR_ACCOUNT_LOCKED;
+                log_audit($conn, null, AUDIT_LOGIN_FAILED, null, null,
+                    ['reason' => 'rate_limited', 'ip' => $ip, 'username' => $username_email], null);
             } else {
-                // Query preparation failed
-                $error = MSG_ERROR_DATABASE;
+
+                // Prepare query to find user by username or email
+                $query = "SELECT
+                            user_id, username, email, password, role_id,
+                            department_id, class_id, level_id, f_name, l_name, is_active
+                          FROM " . TABLE_USER_DETAILS . "
+                          WHERE (username = ? OR email = ?)
+                          LIMIT 1";
+
+                $stmt = mysqli_prepare($conn, $query);
+
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "ss", $username_email, $username_email);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+
+                    if ($user = mysqli_fetch_assoc($result)) {
+
+                        if ($user['is_active'] != 1) {
+                            $error = "Your account has been deactivated. Please contact the administrator.";
+                        } else {
+
+                            if (password_verify($password, $user['password'])) {
+
+                                // Clear failed attempts for this IP on successful login
+                                $stmt_clear = mysqli_prepare($conn,
+                                    "DELETE FROM login_attempts WHERE ip_address = ?");
+                                mysqli_stmt_bind_param($stmt_clear, 's', $ip);
+                                mysqli_stmt_execute($stmt_clear);
+                                mysqli_stmt_close($stmt_clear);
+
+                                // Set session variables
+                                $_SESSION['user_id']       = (int)$user['user_id'];
+                                $_SESSION['role_id']       = (int)$user['role_id'];
+                                $_SESSION['department_id'] = $user['department_id'] ? (int)$user['department_id'] : null;
+                                $_SESSION['class_id']      = $user['class_id']      ? (int)$user['class_id']      : null;
+                                $_SESSION['level_id']      = $user['level_id']      ? (int)$user['level_id']      : null;
+                                $_SESSION['username']      = $user['username'];
+                                $_SESSION['email']         = $user['email'];
+                                $_SESSION['full_name']     = $user['f_name'] . ' ' . $user['l_name'];
+                                $_SESSION['last_activity'] = time();
+                                $_SESSION['login_time']    = time();
+
+                                // Regenerate session ID for security (prevents session fixation)
+                                session_regenerate_id(true);
+
+                                // Log successful login
+                                log_audit($conn, $user['user_id'], AUDIT_LOGIN,
+                                    TABLE_USER_DETAILS, $user['user_id'], null, null);
+
+                                // Redirect to the page the user originally tried to access
+                                if (!empty($_SESSION['redirect_after_login'])) {
+                                    $redirect_url = $_SESSION['redirect_after_login'];
+                                    unset($_SESSION['redirect_after_login']);
+                                    header("Location: " . $redirect_url);
+                                    exit();
+                                }
+                                unset($_SESSION['redirect_after_login']);
+
+                                // Default: redirect based on role
+                                switch ($user['role_id']) {
+                                    case ROLE_ADMIN:     header("Location: admin/index.php");     exit();
+                                    case ROLE_HOD:       header("Location: hod/index.php");       exit();
+                                    case ROLE_SECRETARY: header("Location: secretary/index.php"); exit();
+                                    case ROLE_ADVISOR:   header("Location: advisor/index.php");   exit();
+                                    case ROLE_STUDENT:   header("Location: student/index.php");   exit();
+                                    case ROLE_QUALITY:   header("Location: quality/index.php");   exit();
+                                    default:             $error = "Invalid user role. Please contact administrator.";
+                                }
+
+                            } else {
+                                // Record failed attempt
+                                $uname_attempted = substr($username_email, 0, 100);
+                                $stmt_fail = mysqli_prepare($conn,
+                                    "INSERT INTO login_attempts (ip_address, username_attempted) VALUES (?, ?)");
+                                mysqli_stmt_bind_param($stmt_fail, 'ss', $ip, $uname_attempted);
+                                mysqli_stmt_execute($stmt_fail);
+                                mysqli_stmt_close($stmt_fail);
+
+                                log_audit($conn, null, AUDIT_LOGIN_FAILED,
+                                    TABLE_USER_DETAILS, $user['user_id'],
+                                    ['username' => $username_email, 'reason' => 'wrong_password'], null);
+
+                                $error = MSG_ERROR_INVALID_LOGIN;
+                            }
+                        }
+                    } else {
+                        // User not found — record failed attempt to limit enumeration
+                        $uname_attempted = substr($username_email, 0, 100);
+                        $stmt_fail = mysqli_prepare($conn,
+                            "INSERT INTO login_attempts (ip_address, username_attempted) VALUES (?, ?)");
+                        mysqli_stmt_bind_param($stmt_fail, 'ss', $ip, $uname_attempted);
+                        mysqli_stmt_execute($stmt_fail);
+                        mysqli_stmt_close($stmt_fail);
+
+                        log_audit($conn, null, AUDIT_LOGIN_FAILED, null, null,
+                            ['username' => $username_email, 'reason' => 'user_not_found'], null);
+
+                        $error = MSG_ERROR_INVALID_LOGIN;
+                    }
+
+                    mysqli_stmt_close($stmt);
+                } else {
+                    $error = MSG_ERROR_DATABASE;
+                }
             }
         }
     }
 }
-
-// Close database connection (optional - PHP does this automatically)
-// mysqli_close($conn);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -324,21 +305,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             color: #666;
         }
 
-        .forgot-password {
-            text-align: center;
-            margin-top: 15px;
-        }
-
-        .forgot-password a {
-            color: #667eea;
-            text-decoration: none;
-            font-size: 14px;
-        }
-
-        .forgot-password a:hover {
-            text-decoration: underline;
-        }
-
         @media (max-width: 480px) {
             .login-header h1 {
                 font-size: 20px;
@@ -370,8 +336,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             <!-- Login Form -->
             <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
-                <!-- CSRF Token -->
-                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <!-- CSRF Token (generated via csrf.php) -->
+                <?php csrf_token_input(); ?>
 
                 <!-- Username or Email -->
                 <div class="form-group">
@@ -399,13 +365,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 <!-- Submit Button -->
                 <button type="submit" class="btn-login">Login</button>
-
-                <!-- Forgot Password Link (optional - implement if needed) -->
-                <!--
-                <div class="forgot-password">
-                    <a href="forgot_password.php">Forgot Password?</a>
-                </div>
-                -->
             </form>
         </div>
 

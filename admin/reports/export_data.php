@@ -15,10 +15,10 @@ header('Content-Disposition:attachment;filename="evaluation_export_'.date('Y-m-d
 $output=fopen('php://output','w');
 if($type=='evaluations'){
 fputcsv($output,['Evaluation ID','Student ID','Course Code','Course Name','Lecturer(s)','Department','Date','Status']);
-$query="SELECT e.evaluation_id,u.unique_id,c.course_code,c.name,GROUP_CONCAT(DISTINCT CONCAT(l.f_name,' ',l.l_name) SEPARATOR '; ')as lecturer_name,d.dep_name,e.submitted_at,et.is_used FROM evaluations e JOIN evaluation_tokens et ON e.token=et.token JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.is_active=1 LEFT JOIN user_details l ON cl.lecturer_user_id=l.user_id LEFT JOIN department d ON c.department_id=d.t_id GROUP BY e.evaluation_id,u.unique_id,c.course_code,c.name,d.dep_name,e.submitted_at,et.is_used ORDER BY e.submitted_at DESC";
+$query="SELECT e.evaluation_id,u.unique_id,c.course_code,c.name,GROUP_CONCAT(DISTINCT CONCAT(l.f_name,' ',l.l_name) SEPARATOR '; ')as lecturer_name,d.dep_name,e.evaluation_date,et.is_used FROM evaluations e JOIN evaluation_tokens et ON e.token=et.token JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.is_active=1 LEFT JOIN user_details l ON cl.lecturer_user_id=l.user_id LEFT JOIN department d ON c.department_id=d.t_id GROUP BY e.evaluation_id,u.unique_id,c.course_code,c.name,d.dep_name,e.evaluation_date,et.is_used ORDER BY e.evaluation_date DESC";
 $result=mysqli_query($conn,$query);
 while($row=mysqli_fetch_assoc($result)){
-fputcsv($output,[$row['evaluation_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['lecturer_name'],$row['dep_name'],$row['submitted_at'],$row['is_used']?'Used':'Unused']);
+fputcsv($output,[$row['evaluation_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['lecturer_name'],$row['dep_name'],$row['evaluation_date'],$row['is_used']?'Used':'Unused']);
 }
 }elseif($type=='tokens'){
 fputcsv($output,['Token ID','Student ID','Course Code','Course Name','Department','Created Date','Used']);

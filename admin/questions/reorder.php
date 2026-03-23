@@ -7,7 +7,7 @@ start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
 $page_title='Reorder Questions';
-$query="SELECT * FROM evaluation_questions WHERE is_active=1 ORDER BY question_order,question_id";
+$query="SELECT * FROM evaluation_questions WHERE is_active=1 ORDER BY display_order,question_id";
 $result=mysqli_query($conn,$query);
 $questions=[];
 while($row=mysqli_fetch_assoc($result))$questions[]=$row;
@@ -19,7 +19,7 @@ foreach($order_data as $item){
 $question_id=intval($item['id']??0);
 $new_order=intval($item['order']??1);
 if($question_id>0){
-$query="UPDATE evaluation_questions SET question_order=? WHERE question_id=?";
+$query="UPDATE evaluation_questions SET display_order=? WHERE question_id=?";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"ii",$new_order,$question_id);
 mysqli_stmt_execute($stmt);
@@ -73,7 +73,7 @@ require_once '../../includes/header.php';
 </div>
 </form>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" integrity="sha256-nSMFpCLCHbzkADPnLVIhA0lxJi6TcqIf4X1JWMBv+6A=" crossorigin="anonymous"></script>
 <script>
 const questionsList=document.getElementById('questionsList');
 Sortable.create(questionsList,{
