@@ -28,7 +28,8 @@ define('ROLE_SECRETARY', 3);    // Department Secretary - read-only access
 define('ROLE_ADVISOR', 4);      // Class Advisor - class-level access
 define('ROLE_STUDENT', 5);      // Student - evaluation submission
 define('ROLE_QUALITY', 6);      // Quality Assurance - institution-wide reporting
-// Note: Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class
+// Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class
+define('ROLE_LECTURER', ROLE_ADVISOR); // Alias so existing code referencing ROLE_LECTURER still works
 
 /**
  * Role Names (for display purposes)
@@ -93,7 +94,7 @@ define('SESSION_TIMEOUT', 1800);  // 30 minutes (1800 seconds)
 define('SESSION_COOKIE_LIFETIME', 0);        // 0 = Until browser closes
 define('SESSION_COOKIE_PATH', '/');
 define('SESSION_COOKIE_DOMAIN', '');         // Empty = Current domain
-define('SESSION_COOKIE_SECURE', false);      // Set to TRUE if using HTTPS
+define('SESSION_COOKIE_SECURE', !IS_DEVELOPMENT);  // true in production (HTTPS), false in dev
 define('SESSION_COOKIE_HTTPONLY', true);     // Prevent JavaScript access
 define('SESSION_COOKIE_SAMESITE', 'Lax');    // CSRF protection
 

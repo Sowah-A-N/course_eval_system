@@ -42,7 +42,7 @@ $params[]=$search_param;
 $types.='ssss';
 }
 $where_clause=implode(' AND ',$where);
-$query="SELECT u.user_id,u.f_name,u.l_name,u.email,u.username,u.role_id,u.department_id,u.is_active,u.date_created,d.dep_name FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id WHERE $where_clause ORDER BY u.date_created DESC";
+$query="SELECT u.user_id,u.f_name,u.l_name,u.email,u.username,u.role_id,u.department_id,u.is_active,u.created_at,d.dep_name FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id WHERE $where_clause ORDER BY u.created_at DESC";
 $stmt=mysqli_prepare($conn,$query);
 if(!empty($params)){
 mysqli_stmt_bind_param($stmt,$types,...$params);
@@ -178,7 +178,7 @@ $role_class='role-'.strtolower(str_replace(' ','-',ROLE_NAMES[$user['role_id']]?
 <span class="status-badge status-inactive">Inactive</span>
 <?php endif;?>
 </td>
-<td><?php echo date('M d, Y',strtotime($user['date_created']));?></td>
+<td><?php echo date('M d, Y',strtotime($user['created_at']));?></td>
 <td>
 <a href="edit.php?id=<?php echo $user['user_id'];?>" class="btn btn-primary btn-sm">Edit</a>
 <a href="delete.php?id=<?php echo $user['user_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this user?')">Delete</a>

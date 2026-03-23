@@ -3,30 +3,40 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
 $page_title='Add New Semester';
 $errors=[];
+// Load academic years for the dropdown
+$academic_years=[];
+$result_ay=mysqli_query($conn,"SELECT academic_year_id,year_label FROM academic_year ORDER BY start_year DESC");
+while($row=mysqli_fetch_assoc($result_ay))$academic_years[]=$row;
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid security token.';
+$academic_year_id=intval($_POST['academic_year_id']??0);
 $semester_name=trim($_POST['semester_name']??'');
 $semester_value=intval($_POST['semester_value']??0);
-if(empty($semester_name))$errors[]='Semester name required.';
+$is_active=isset($_POST['is_active'])?1:0;
+if($academic_year_id==0)$errors[]='Academic year required.';
+if(!in_array($semester_name,['First','Second']))$errors[]='Semester name must be First or Second.';
 if($semester_value==0)$errors[]='Semester value required.';
 if(empty($errors)){
-$query_check="SELECT semester_id FROM semesters WHERE semester_value=?";
+$query_check="SELECT semester_id FROM semesters WHERE academic_year_id=? AND semester_name=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
-mysqli_stmt_bind_param($stmt_check,"i",$semester_value);
+mysqli_stmt_bind_param($stmt_check,"is",$academic_year_id,$semester_name);
 mysqli_stmt_execute($stmt_check);
-if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Semester value already exists.';
+if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='That semester already exists for the selected academic year.';
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="INSERT INTO semesters (semester_name,semester_value) VALUES (?,?)";
+$query="INSERT INTO semesters (academic_year_id,semester_name,semester_value,is_active) VALUES (?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"si",$semester_name,$semester_value);
+mysqli_stmt_bind_param($stmt,"isii",$academic_year_id,$semester_name,$semester_value,$is_active);
 if(mysqli_stmt_execute($stmt)){
+$new_semester_id=mysqli_insert_id($conn);
+log_audit($conn,$_SESSION['user_id'],'SEMESTER_CREATE','semesters',$new_semester_id,null,['academic_year_id'=>$academic_year_id,'semester_name'=>$semester_name,'semester_value'=>$semester_value]);
 $_SESSION['flash_message']='Semester created successfully!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");
@@ -42,7 +52,7 @@ require_once '../../includes/header.php';
 .form-group{margin-bottom:20px}
 .form-label{display:block;font-size:14px;font-weight:500;margin-bottom:5px}
 .form-label.required::after{content:' *';color:#dc3545}
-.form-input{width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:5px;font-size:14px}
+.form-input,.form-select{width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:5px;font-size:14px}
 .btn{padding:12px 30px;border:none;border-radius:5px;font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;display:inline-block;margin-right:10px}
 .btn-primary{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}
 .btn-secondary{background:#6c757d;color:white}
@@ -54,10 +64,7 @@ require_once '../../includes/header.php';
 <p>Create a new semester configuration</p>
 </div>
 <div class="info-box">
-<strong>💡 Common Values:</strong><br>
-• First Semester = 1<br>
-• Second Semester = 2<br>
-• Summer Semester = 3
+<strong>💡 Note:</strong> Each semester belongs to an academic year. Only "First" and "Second" semester names are supported.
 </div>
 <?php if(!empty($errors)): ?>
 <div class="alert-error">
@@ -73,13 +80,38 @@ require_once '../../includes/header.php';
 <form method="POST">
 <?php csrf_token_input();?>
 <div class="form-group">
+<label class="form-label required">Academic Year</label>
+<select name="academic_year_id" class="form-select" required>
+<option value="0">-- Select Academic Year --</option>
+<?php foreach($academic_years as $ay): ?>
+<option value="<?php echo $ay['academic_year_id'];?>" <?php echo(isset($_POST['academic_year_id'])&&$_POST['academic_year_id']==$ay['academic_year_id'])?'selected':'';?>>
+<?php echo htmlspecialchars($ay['year_label']);?>
+</option>
+<?php endforeach;?>
+</select>
+</div>
+<div class="form-group">
 <label class="form-label required">Semester Name</label>
-<input type="text" name="semester_name" class="form-input" value="<?php echo htmlspecialchars($_POST['semester_name']??'');?>" placeholder="e.g., First Semester" required>
+<select name="semester_name" class="form-select" required>
+<option value="">-- Select --</option>
+<option value="First" <?php echo(($_POST['semester_name']??'')==='First')?'selected':'';?>>First</option>
+<option value="Second" <?php echo(($_POST['semester_name']??'')==='Second')?'selected':'';?>>Second</option>
+</select>
 </div>
 <div class="form-group">
 <label class="form-label required">Semester Value</label>
-<input type="number" name="semester_value" class="form-input" value="<?php echo htmlspecialchars($_POST['semester_value']??'');?>" placeholder="e.g., 1" min="1" required>
-<small style="color:#666">Numeric value for ordering (1, 2, 3, etc.)</small>
+<select name="semester_value" class="form-select" required>
+<option value="0">-- Select --</option>
+<option value="1" <?php echo(($_POST['semester_value']??'')==='1')?'selected':'';?>>1 (First)</option>
+<option value="2" <?php echo(($_POST['semester_value']??'')==='2')?'selected':'';?>>2 (Second)</option>
+</select>
+<small style="color:#666">Numeric ordering: First = 1, Second = 2</small>
+</div>
+<div class="form-group">
+<label>
+<input type="checkbox" name="is_active" <?php echo(isset($_POST['is_active'])||!isset($_POST['semester_name']))?'checked':'';?>>
+Active
+</label>
 </div>
 <button type="submit" class="btn btn-primary">Create Semester</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

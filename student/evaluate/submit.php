@@ -171,15 +171,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         mysqli_begin_transaction($conn);
 
         try {
-            // Insert evaluation record
+            // Lock token row inside transaction to prevent concurrent double-submissions
+            $stmt_lock = mysqli_prepare($conn, "SELECT is_used FROM evaluation_tokens WHERE token=? FOR UPDATE");
+            mysqli_stmt_bind_param($stmt_lock, "s", $token_data['token']);
+            mysqli_stmt_execute($stmt_lock);
+            $lock_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_lock));
+            mysqli_stmt_close($stmt_lock);
+            if (!$lock_row || $lock_row['is_used'] == 1) {
+                mysqli_rollback($conn);
+                $_SESSION['flash_message'] = 'This evaluation has already been submitted.';
+                $_SESSION['flash_type'] = 'warning';
+                header("Location: available_courses.php");
+                exit();
+            }
+
+            // Insert evaluation record (evaluation_date defaults to NOW())
             $query_insert_eval = "
                 INSERT INTO evaluations (
                     token,
                     course_id,
                     academic_year_id,
-                    semester_id,
-                    submitted_at
-                ) VALUES (?, ?, ?, ?, NOW())
+                    semester_id
+                ) VALUES (?, ?, ?, ?)
             ";
 
             $stmt_eval = mysqli_prepare($conn, $query_insert_eval);

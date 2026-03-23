@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -21,13 +22,11 @@ if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid security token.';
 $course_code=trim($_POST['course_code']??'');
 $name=trim($_POST['name']??'');
-$credit_hours=intval($_POST['credit_hours']??0);
 $department_id=intval($_POST['department_id']??0);
 $level_id=intval($_POST['level_id']??0);
 $semester_id=intval($_POST['semester_id']??0);
 if(empty($course_code))$errors[]='Course code required.';
 if(empty($name))$errors[]='Course name required.';
-if($credit_hours<=0)$errors[]='Credit hours must be positive.';
 if($department_id==0)$errors[]='Please select a department.';
 if($level_id==0)$errors[]='Please select a level.';
 if($semester_id==0)$errors[]='Please select a semester.';
@@ -40,10 +39,12 @@ if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Course code exists
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="INSERT INTO courses (course_code,name,credit_hours,department_id,level_id,semester_id) VALUES (?,?,?,?,?,?)";
+$query="INSERT INTO courses (course_code,name,department_id,level_id,semester_id) VALUES (?,?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"ssiiii",$course_code,$name,$credit_hours,$department_id,$level_id,$semester_id);
+mysqli_stmt_bind_param($stmt,"ssiii",$course_code,$name,$department_id,$level_id,$semester_id);
 if(mysqli_stmt_execute($stmt)){
+$new_course_id=mysqli_insert_id($conn);
+log_audit($conn,$_SESSION['user_id'],'COURSE_CREATE','courses',$new_course_id,null,['course_code'=>$course_code,'name'=>$name,'department_id'=>$department_id]);
 $_SESSION['flash_message']='Course created successfully!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");
@@ -89,10 +90,6 @@ require_once '../../includes/header.php';
 <div class="form-group">
 <label class="form-label required">Course Name</label>
 <input type="text" name="name" class="form-input" value="<?php echo htmlspecialchars($_POST['name']??'');?>" placeholder="e.g., Introduction to Computer Science" required>
-</div>
-<div class="form-group">
-<label class="form-label required">Credit Hours</label>
-<input type="number" name="credit_hours" class="form-input" value="<?php echo htmlspecialchars($_POST['credit_hours']??'3');?>" min="1" max="10" required>
 </div>
 <div class="form-group">
 <label class="form-label required">Department</label>

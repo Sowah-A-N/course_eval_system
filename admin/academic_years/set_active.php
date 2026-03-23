@@ -17,8 +17,12 @@ $year=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if(!$year){$_SESSION['flash_message']='Academic year not found.';header("Location:list.php");exit();}
 $semesters=[];
-$result_sems=mysqli_query($conn,"SELECT * FROM semesters ORDER BY semester_value");
+$stmt_sems=mysqli_prepare($conn,"SELECT * FROM semesters WHERE academic_year_id=? ORDER BY semester_value");
+mysqli_stmt_bind_param($stmt_sems,"i",$year_id);
+mysqli_stmt_execute($stmt_sems);
+$result_sems=mysqli_stmt_get_result($stmt_sems);
 while($row=mysqli_fetch_assoc($result_sems))$semesters[]=$row;
+mysqli_stmt_close($stmt_sems);
 $query_current="SELECT * FROM view_active_period LIMIT 1";
 $result_current=mysqli_query($conn,$query_current);
 $current_period=mysqli_fetch_assoc($result_current);
@@ -27,18 +31,26 @@ if(!validate_csrf_token())$errors[]='Invalid token.';
 $semester_id=intval($_POST['semester_id']??0);
 if($semester_id==0)$errors[]='Please select a semester.';
 if(empty($errors)){
+// Validate that the semester belongs to the selected academic year
+$stmt_v=mysqli_prepare($conn,"SELECT semester_id FROM semesters WHERE semester_id=? AND academic_year_id=?");
+mysqli_stmt_bind_param($stmt_v,"ii",$semester_id,$year_id);
+mysqli_stmt_execute($stmt_v);
+if(mysqli_stmt_get_result($stmt_v)->num_rows==0)$errors[]='Selected semester does not belong to this academic year.';
+mysqli_stmt_close($stmt_v);
+}
+if(empty($errors)){
 mysqli_begin_transaction($conn);
 try{
-$query_clear="UPDATE academic_year SET is_active_year=0";
+$query_clear="UPDATE academic_year SET is_active=0";
 mysqli_query($conn,$query_clear);
-$query_clear_sem="UPDATE semesters SET is_active_semester=0";
+$query_clear_sem="UPDATE semesters SET is_active=0";
 mysqli_query($conn,$query_clear_sem);
-$query_set_year="UPDATE academic_year SET is_active_year=1 WHERE academic_year_id=?";
+$query_set_year="UPDATE academic_year SET is_active=1 WHERE academic_year_id=?";
 $stmt_year=mysqli_prepare($conn,$query_set_year);
 mysqli_stmt_bind_param($stmt_year,"i",$year_id);
 mysqli_stmt_execute($stmt_year);
 mysqli_stmt_close($stmt_year);
-$query_set_sem="UPDATE semesters SET is_active_semester=1 WHERE semester_id=?";
+$query_set_sem="UPDATE semesters SET is_active=1 WHERE semester_id=?";
 $stmt_sem=mysqli_prepare($conn,$query_set_sem);
 mysqli_stmt_bind_param($stmt_sem,"i",$semester_id);
 mysqli_stmt_execute($stmt_sem);
@@ -90,7 +102,7 @@ require_once '../../includes/header.php';
 <h3 style="margin:0 0 10px 0">Selected Academic Year</h3>
 <div style="font-size:18px;font-weight:600;color:#667eea"><?php echo htmlspecialchars($year['year_label']);?></div>
 <div style="font-size:14px;color:#666;margin-top:5px">
-<?php echo date('M Y',strtotime($year['year_start']));?> - <?php echo date('M Y',strtotime($year['year_end']));?>
+<?php echo $year['start_year'];?> &ndash; <?php echo $year['end_year'];?>
 </div>
 </div>
 <form method="POST">

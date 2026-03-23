@@ -6,7 +6,7 @@ start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
 $page_title='Response Summary';
-$query_overall="SELECT COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens,COUNT(DISTINCT e.evaluation_id)as total_evaluations FROM evaluation_tokens et LEFT JOIN evaluations e ON et.token_id=e.token_id";
+$query_overall="SELECT COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens,COUNT(DISTINCT e.evaluation_id)as total_evaluations FROM evaluation_tokens et LEFT JOIN evaluations e ON et.token=e.token";
 $overall=mysqli_fetch_assoc(mysqli_query($conn,$query_overall));
 $query_by_dept="SELECT d.dep_name,COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens FROM department d LEFT JOIN courses c ON d.t_id=c.department_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id GROUP BY d.t_id ORDER BY d.dep_name";
 $result_dept=mysqli_query($conn,$query_by_dept);

@@ -84,7 +84,7 @@ $is_active=$active_period&&$active_period['academic_year_id']==$year['academic_y
 <div class="year-info">
 <div class="year-label"><?php echo htmlspecialchars($year['year_label']);?></div>
 <div class="year-dates">
-<?php echo date('M Y',strtotime($year['start_year']));?> - <?php echo date('M Y',strtotime($year['end_year']));?>
+<?php echo $year['start_year'];?> &ndash; <?php echo $year['end_year'];?>
 </div>
 </div>
 <div class="year-status">

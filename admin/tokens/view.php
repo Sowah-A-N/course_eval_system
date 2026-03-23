@@ -44,7 +44,7 @@ $types.='sss';
 }
 $where_clause=implode(' AND ',$where);
 $query="
-SELECT et.token_id,et.token,et.is_used,et.generated_at,et.used_at,et.expires_at,
+SELECT et.token_id,et.token,et.is_used,et.created_at,et.used_at,
 u.f_name,u.l_name,u.unique_id,
 c.course_code,c.name as course_name,
 d.dep_name,
@@ -59,7 +59,7 @@ LEFT JOIN level l ON c.level_id=l.t_id
 LEFT JOIN academic_year ay ON et.academic_year_id=ay.academic_year_id
 LEFT JOIN semesters s ON et.semester_id=s.semester_id
 WHERE $where_clause
-ORDER BY et.generated_at DESC
+ORDER BY et.created_at DESC
 LIMIT 1000
 ";
 $stmt=mysqli_prepare($conn,$query);
@@ -190,7 +190,7 @@ Showing: <strong><?php echo count($tokens);?></strong> token(s)
 <th>Level</th>
 <th>Period</th>
 <th>Status</th>
-<th>Generated</th>
+<th>Created</th>
 <th>Used</th>
 </tr>
 </thead>
@@ -218,7 +218,7 @@ Showing: <strong><?php echo count($tokens);?></strong> token(s)
 <span class="status-badge status-unused">Unused</span>
 <?php endif;?>
 </td>
-<td><?php echo date('M d, Y',strtotime($token['generated_at']));?></td>
+<td><?php echo date('M d, Y',strtotime($token['created_at']));?></td>
 <td><?php echo $token['used_at']?date('M d, Y',strtotime($token['used_at'])):'—';?></td>
 </tr>
 <?php endforeach;?>

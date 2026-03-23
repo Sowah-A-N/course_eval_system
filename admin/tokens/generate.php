@@ -3,6 +3,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
 if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
@@ -80,7 +81,7 @@ continue;
 mysqli_stmt_close($stmt_check);
 }
 $token=bin2hex(random_bytes(TOKEN_LENGTH));
-$query_insert="INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,generated_at,is_used,expires_at) VALUES (?,?,?,?,?,NOW(),0,DATE_ADD(NOW(),INTERVAL 90 DAY))";
+$query_insert="INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,is_used) VALUES (?,?,?,?,?,0)";
 $stmt_insert=mysqli_prepare($conn,$query_insert);
 mysqli_stmt_bind_param($stmt_insert,"siiii",$token,$student_id,$course_id,$active_period['academic_year_id'],$active_period['semester_id']);
 if(mysqli_stmt_execute($stmt_insert)){
@@ -91,6 +92,7 @@ mysqli_stmt_close($stmt_insert);
 }
 mysqli_commit($conn);
 $success=true;
+log_audit($conn,$_SESSION['user_id'],'TOKEN_GENERATE','evaluation_tokens',null,null,['count'=>$generated_count,'department_id'=>$department_id,'level_id'=>$level_id,'academic_year_id'=>$active_period['academic_year_id'],'semester_id'=>$active_period['semester_id']]);
 $_SESSION['flash_message']="Successfully generated $generated_count evaluation tokens!";
 $_SESSION['flash_type']='success';
 }
@@ -210,4 +212,4 @@ You must configure an active academic year and semester before generating tokens
 </div>
 <?php endif;?>
 </div>
-<?php require_once '../../includes/header.php';?>
+<?php require_once '../../includes/footer.php';?>
