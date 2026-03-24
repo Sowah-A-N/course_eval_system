@@ -65,7 +65,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt_check = mysqli_prepare($conn,
                 "SELECT COUNT(*) AS attempt_count FROM login_attempts
                  WHERE ip_address = ? AND attempted_at > DATE_SUB(NOW(), INTERVAL ? SECOND)");
-            mysqli_stmt_bind_param($stmt_check, 'si', $ip, LOGIN_LOCKOUT_TIME);
+
+            $lockout_time = LOGIN_LOCKOUT_TIME;
+            mysqli_stmt_bind_param($stmt_check, 'si', $ip, $lockout_time);
+
+            // mysqli_stmt_bind_param($stmt_check, 'si', $ip, LOGIN_LOCKOUT_TIME);
             mysqli_stmt_execute($stmt_check);
             $attempt_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_check));
             mysqli_stmt_close($stmt_check);
