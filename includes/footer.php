@@ -15,15 +15,30 @@
  * require_once 'includes/footer.php';
  */
 
-// Get base URL for links
+// Get base URL for links — same depth-based logic as header.php so it works
+// correctly for both shallow (admin/index.php) and deep pages (admin/users/list.php).
 $base_url = '';
-$current_dir = basename(dirname($_SERVER['PHP_SELF']));
-if (
-    $current_dir == 'admin' || $current_dir == 'hod' || $current_dir == 'student' ||
-    $current_dir == 'quality' || $current_dir == 'advisor' || $current_dir == 'secretary'
-) {
-    $base_url = '..';
+$_fp = $_SERVER['PHP_SELF'] ?? '';
+foreach (['admin' => 7, 'secretary' => 11, 'hod' => 5, 'quality' => 9, 'advisor' => 9, 'student' => 9] as $_fm => $_fl) {
+    $needle = '/' . $_fm . '/';
+    if (strpos($_fp, $needle) !== false) {
+        $_fa   = substr($_fp, strpos($_fp, $needle) + strlen($needle));
+        $depth = substr_count($_fa, '/');
+        $base_url = rtrim(str_repeat('../', $depth + 1), '/');
+        break;
+    }
 }
+
+// Role → folder map (mirrors header.php)
+$_footer_role_folders = [
+    ROLE_ADMIN     => 'admin',
+    ROLE_HOD       => 'hod',
+    ROLE_SECRETARY => 'secretary',
+    ROLE_ADVISOR   => 'advisor',
+    ROLE_STUDENT   => 'student',
+    ROLE_QUALITY   => 'quality',
+];
+$_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? '';
 ?>
 
 </div> <!-- End of main-content -->
@@ -46,9 +61,9 @@ if (
             <div>
                 <h3 style="margin-bottom: 15px; font-size: 16px;">Quick Links</h3>
                 <ul style="list-style: none; padding: 0; margin: 0;">
-                    <?php if (isset($_SESSION['user_id'])): ?>
+                    <?php if (isset($_SESSION['user_id']) && !empty($_footer_dashboard_folder)): ?>
                         <li style="margin-bottom: 8px;">
-                            <a href="<?php echo $base_url; ?>/<?php echo strtolower(str_replace(' ', '', ROLE_NAMES[$_SESSION['role_id']] ?? '')); ?>/index.php"
+                            <a href="<?php echo $base_url; ?>/<?php echo $_footer_dashboard_folder; ?>/index.php"
                                 style="color: white; text-decoration: none; font-size: 14px; opacity: 0.9;">
                                 Dashboard
                             </a>
@@ -59,12 +74,6 @@ if (
                             target="_blank"
                             style="color: white; text-decoration: none; font-size: 14px; opacity: 0.9;">
                             <?php echo INSTITUTION_SHORT_NAME; ?> Website
-                        </a>
-                    </li>
-                    <li style="margin-bottom: 8px;">
-                        <a href="<?php echo $base_url; ?>/docs/USER_MANUAL.md"
-                            style="color: white; text-decoration: none; font-size: 14px; opacity: 0.9;">
-                            User Manual
                         </a>
                     </li>
                 </ul>
@@ -91,11 +100,7 @@ if (
                 &copy; <?php echo date('Y'); ?> <?php echo INSTITUTION_NAME; ?>. All rights reserved.
             </div>
             <div style="font-size: 13px; opacity: 0.8;">
-                Developed for <?php echo INSTITUTION_SHORT_NAME; ?> |
-                <a href="<?php echo $base_url; ?>/README.md"
-                    style="color: white; text-decoration: none;">
-                    About this System
-                </a>
+                Developed for <?php echo INSTITUTION_SHORT_NAME; ?>
             </div>
         </div>
     </div>
