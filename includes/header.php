@@ -37,36 +37,32 @@ $user_name = $_SESSION['full_name'] ?? 'User';
 $user_role = $_SESSION['role_id'] ?? 0;
 $user_role_name = ROLE_NAMES[$user_role] ?? 'Unknown';
 
-// Determine base URL for links based on current path
+// Map role_id → folder name (avoids string-munging ROLE_NAMES which produces wrong paths)
+$_role_folders = [
+    ROLE_ADMIN      => 'admin',
+    ROLE_HOD        => 'hod',
+    ROLE_SECRETARY  => 'secretary',
+    ROLE_ADVISOR    => 'advisor',  // ROLE_LECTURER shares this value
+    ROLE_STUDENT    => 'student',
+    ROLE_QUALITY    => 'quality',
+];
+$_dashboard_folder = $_role_folders[$user_role] ?? '';
+
+// Determine base URL for links based on current path.
+// str_repeat produces e.g. '../../' — rtrim removes the trailing slash so that
+// concatenating with '/path' gives '../../path' (single slash, not double).
 $base_url = '';
 $current_path = $_SERVER['PHP_SELF'] ?? '';
 
-// Check if we're in a module directory or its subdirectory
-if (strpos($current_path, '/admin/') !== false) {
-    // Count slashes after /admin/ to determine depth
-    $after_admin = substr($current_path, strpos($current_path, '/admin/') + 7);
-    $depth = substr_count($after_admin, '/');
-    $base_url = str_repeat('../', $depth + 1);
-} elseif (strpos($current_path, '/secretary/') !== false) {
-    $after_secretary = substr($current_path, strpos($current_path, '/secretary/') + 11);
-    $depth = substr_count($after_secretary, '/');
-    $base_url = str_repeat('../', $depth + 1);
-} elseif (strpos($current_path, '/hod/') !== false) {
-    $after_hod = substr($current_path, strpos($current_path, '/hod/') + 5);
-    $depth = substr_count($after_hod, '/');
-    $base_url = str_repeat('../', $depth + 1);
-} elseif (strpos($current_path, '/quality/') !== false) {
-    $after_quality = substr($current_path, strpos($current_path, '/quality/') + 9);
-    $depth = substr_count($after_quality, '/');
-    $base_url = str_repeat('../', $depth + 1);
-} elseif (strpos($current_path, '/advisor/') !== false) {
-    $after_advisor = substr($current_path, strpos($current_path, '/advisor/') + 9);
-    $depth = substr_count($after_advisor, '/');
-    $base_url = str_repeat('../', $depth + 1);
-} elseif (strpos($current_path, '/student/') !== false) {
-    $after_student = substr($current_path, strpos($current_path, '/student/') + 9);
-    $depth = substr_count($after_student, '/');
-    $base_url = str_repeat('../', $depth + 1);
+$_modules = ['admin' => 7, 'secretary' => 11, 'hod' => 5, 'quality' => 9, 'advisor' => 9, 'student' => 9];
+foreach ($_modules as $_mod => $_len) {
+    $needle = '/' . $_mod . '/';
+    if (strpos($current_path, $needle) !== false) {
+        $_after = substr($current_path, strpos($current_path, $needle) + strlen($needle));
+        $depth  = substr_count($_after, '/');
+        $base_url = rtrim(str_repeat('../', $depth + 1), '/');
+        break;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -344,7 +340,7 @@ if (strpos($current_path, '/admin/') !== false) {
         <ul>
             <!-- Dashboard (All Roles) -->
             <li>
-                <a href="<?php echo $base_url; ?>/<?php echo strtolower(str_replace(' ', '', $user_role_name)); ?>/index.php"
+                <a href="<?php echo $base_url; ?>/<?php echo $_dashboard_folder; ?>/index.php"
                     class="<?php echo $current_page == 'index.php' ? 'active' : ''; ?>">
                     Dashboard
                 </a>
@@ -378,7 +374,7 @@ if (strpos($current_path, '/admin/') !== false) {
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/admin/questions/list.php">View Questions</a>
                         <a href="<?php echo $base_url; ?>/admin/questions/create.php">Create Question</a>
-                        <a href="<?php echo $base_url; ?>/admin/questions/list.php">Archived Questions</a>
+                        <a href="<?php echo $base_url; ?>/admin/questions/reorder.php">Reorder Questions</a>
                     </div>
                 </li>
                 <li class="dropdown">
@@ -444,6 +440,7 @@ if (strpos($current_path, '/admin/') !== false) {
                         <a href="<?php echo $base_url; ?>/quality/reports/department_comparison.php">Department Comparison</a>
                         <a href="<?php echo $base_url; ?>/quality/reports/course_analysis.php">Course Analysis</a>
                         <a href="<?php echo $base_url; ?>/quality/reports/question_analysis.php">Question Analysis</a>
+                        <a href="<?php echo $base_url; ?>/quality/reports/trend_analysis.php">Trend Analysis</a>
                     </div>
                 </li>
 
