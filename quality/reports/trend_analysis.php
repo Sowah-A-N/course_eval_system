@@ -15,8 +15,10 @@ require_once '../../includes/session.php';
 start_secure_session();
 check_login();
 
-if (!defined('ROLE_QUALITY')) define('ROLE_QUALITY', 6);
-if ($_SESSION['role_id'] != ROLE_ADMIN || $_SESSION['role_id'] != ROLE_QUALITY) {
+// ROLE_QUALITY is defined in constants.php (already loaded above)
+// Bug was: != ROLE_ADMIN || != ROLE_QUALITY is always true (blocks everyone).
+// Fix: use && so only non-admin AND non-quality users are redirected.
+if ($_SESSION['role_id'] != ROLE_ADMIN && $_SESSION['role_id'] != ROLE_QUALITY) {
     header("Location: ../../login.php");
     exit();
 }
