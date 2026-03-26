@@ -94,7 +94,8 @@ define('SESSION_TIMEOUT', 1800);  // 30 minutes (1800 seconds)
 define('SESSION_COOKIE_LIFETIME', 0);        // 0 = Until browser closes
 define('SESSION_COOKIE_PATH', '/');
 define('SESSION_COOKIE_DOMAIN', '');         // Empty = Current domain
-define('SESSION_COOKIE_SECURE', !IS_DEVELOPMENT);  // true in production (HTTPS), false in dev
+// define('SESSION_COOKIE_SECURE', !IS_DEVELOPMENT);  // true in production (HTTPS), false in dev
+define('SESSION_COOKIE_SECURE', 'false');  // true in production (HTTPS), false in dev
 define('SESSION_COOKIE_HTTPONLY', true);     // Prevent JavaScript access
 define('SESSION_COOKIE_SAMESITE', 'Lax');    // CSRF protection
 
