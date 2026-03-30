@@ -8,6 +8,7 @@ check_login();
 if($_SESSION['role_id']!=ROLE_SECRETARY){header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $student_id=intval($_GET['id']??0);
+if($student_id<=0){$_SESSION['flash_message']='Invalid student ID.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 $page_title='Edit Student';
 $errors=[];
 // Get student (department scope check)

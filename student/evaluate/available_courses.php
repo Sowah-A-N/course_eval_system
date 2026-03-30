@@ -46,7 +46,9 @@ $student_name = $_SESSION['full_name'];
 $page_title = 'Available Course Evaluations';
 
 // Get filter parameter
-$filter_status = isset($_GET['status']) ? $_GET['status'] : 'all'; // all, pending, completed
+$allowed_statuses = ['all', 'pending', 'completed'];
+$filter_status = isset($_GET['status']) && in_array($_GET['status'], $allowed_statuses, true)
+    ? $_GET['status'] : 'all';
 
 // Get active academic period
 $query_period = "SELECT * FROM view_active_period LIMIT 1";

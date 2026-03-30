@@ -410,7 +410,7 @@ require_once '../includes/header.php';
                     <?php echo htmlspecialchars($activity['course_name']); ?>
                 </div>
                 <div class="activity-time">
-                    <?php echo date('M d, h:i A', strtotime($activity['used_at'])); ?>
+                    <?php echo htmlspecialchars(date('M d, h:i A', strtotime($activity['used_at'])), ENT_QUOTES, 'UTF-8'); ?>
                 </div>
             </div>
         <?php endforeach; ?>

@@ -40,6 +40,7 @@ $is_active=isset($_POST['is_active'])?1:0;
 if(empty($f_name))$errors[]='First name required.';
 if(empty($l_name))$errors[]='Last name required.';
 if(empty($email))$errors[]='Email required.';
+elseif(!filter_var($email,FILTER_VALIDATE_EMAIL))$errors[]='Invalid email format.';
 if($role_id==0)$errors[]='Select role.';
 if(empty($errors)){
 $query_check="SELECT user_id FROM user_details WHERE email=? AND user_id!=?";
