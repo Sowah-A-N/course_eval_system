@@ -109,6 +109,11 @@ function validate_csrf_token($token = null, $input_name = null)
         return false;
     }
 
+    // Reject expired tokens
+    if (is_csrf_token_expired()) {
+        return false;
+    }
+
     // Get the stored token
     $stored_token = $_SESSION[CSRF_TOKEN_NAME];
 

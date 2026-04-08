@@ -334,7 +334,7 @@ require_once '../../includes/header.php';
         <strong>✓ Success!</strong> Course(s) assigned successfully.
         <div style="margin-top: 10px;">
             <a href="list.php">Back to Lecturers</a> |
-            <a href="assign_course.php">Assign More Courses</a>
+            <a href="assign_courses.php">Assign More Courses</a>
         </div>
     </div>
 <?php endif; ?>

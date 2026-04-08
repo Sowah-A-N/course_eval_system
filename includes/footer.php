@@ -123,7 +123,7 @@ $_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? 
 <!-- Inline JavaScript for page-specific functionality -->
 <?php if (isset($inline_js)): ?>
     <script>
-        <?php echo $inline_js; ?>
+        <?php echo $inline_js; // Must only be set to developer-authored strings, never user input ?>
     </script>
 <?php endif; ?>
 
@@ -162,7 +162,7 @@ $_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? 
 
             // Redirect to login if session expired
             if (timeUntilTimeout <= 0) {
-                window.location.href = '<?php echo $base_url; ?>/logout.php';
+                window.location.href = <?php echo json_encode($base_url . '/logout.php', JSON_HEX_TAG | JSON_HEX_AMP); ?>;
             }
         }, 60000); // Check every minute
     })();

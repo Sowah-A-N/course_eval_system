@@ -384,7 +384,7 @@ require_once '../../includes/header.php';
                             </div>
                         </td>
                         <td>
-                            <a href="../lecturers/assign_course.php?course_id=<?php echo $course['id']; ?>" class="btn btn-primary btn-sm">
+                            <a href="../lecturers/assign_courses.php?course_id=<?php echo $course['id']; ?>" class="btn btn-primary btn-sm">
                                 Assign Lecturer
                             </a>
                         </td>

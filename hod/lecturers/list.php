@@ -370,7 +370,7 @@ require_once '../../includes/header.php';
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a href="assign_course.php?lecturer_id=<?php echo $lecturer['user_id']; ?>" class="btn btn-primary btn-sm">
+                            <a href="assign_courses.php?lecturer_id=<?php echo $lecturer['user_id']; ?>" class="btn btn-primary btn-sm">
                                 Assign Courses
                             </a>
                         </td>

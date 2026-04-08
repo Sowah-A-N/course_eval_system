@@ -16,7 +16,7 @@ start_secure_session();
 check_login();
 
 if (!defined('ROLE_QUALITY')) define('ROLE_QUALITY', 6);
-if ($_SESSION['role_id'] != ROLE_ADMIN || $_SESSION['role_id'] != ROLE_QUALITY) {
+if ($_SESSION['role_id'] != ROLE_ADMIN && $_SESSION['role_id'] != ROLE_QUALITY) {
     header("Location: ../../login.php");
     exit();
 }
