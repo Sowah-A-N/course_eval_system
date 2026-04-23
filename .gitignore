@@ -4,3 +4,4 @@ database.php
 /vendor
 .env
 course_evaluation.sql
+.claude/
