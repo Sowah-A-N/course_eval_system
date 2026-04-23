@@ -404,16 +404,20 @@ function display_session_message() {
  * @return string Base URL
  */
 function get_base_url() {
-    if (defined('APP_URL')) {
-        return APP_URL;
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+    // Derive app root from this file's location: {app_root}/includes/session.php
+    $doc_root = realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
+    $app_root = realpath(dirname(__FILE__) . '/..');
+
+    if ($doc_root && $app_root && strpos($app_root, $doc_root) === 0) {
+        $path = str_replace('\\', '/', substr($app_root, strlen($doc_root)));
+        return $protocol . '://' . $host . $path;
     }
 
-    // Fallback: construct from server variables
-    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'];
-    $script = dirname($_SERVER['SCRIPT_NAME']);
-
-    return rtrim($protocol . '://' . $host . $script, '/');
+    // Fallback to the configured APP_URL constant
+    return defined('APP_URL') ? APP_URL : $protocol . '://' . $host;
 }
 
 /**

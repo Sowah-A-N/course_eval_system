@@ -55,6 +55,9 @@ function generate_csrf_token($force_new = false)
 {
     // Check if token already exists and we're not forcing a new one
     if (!$force_new && isset($_SESSION[CSRF_TOKEN_NAME]) && !empty($_SESSION[CSRF_TOKEN_NAME])) {
+        if (!isset($_SESSION[CSRF_TOKEN_NAME . '_time'])) {
+            $_SESSION[CSRF_TOKEN_NAME . '_time'] = time();
+        }
         return $_SESSION[CSRF_TOKEN_NAME];
     }
 
