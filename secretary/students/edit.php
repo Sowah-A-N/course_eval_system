@@ -5,9 +5,10 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_SECRETARY){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_SECRETARY){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $student_id=intval($_GET['id']??0);
+if($student_id<=0){$_SESSION['flash_message']='Invalid student ID.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 $page_title='Edit Student';
 $errors=[];
 // Get student (department scope check)
@@ -128,7 +129,7 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <div class="form-group">
-<label><input type="checkbox" name="is_active" <?php echo $student['is_active']?'checked':'';?>> Active</label>
+<label for="is_active"><input type="checkbox" id="is_active" name="is_active" <?php echo $student['is_active']?'checked':'';?>> Active</label>
 </div>
 <button type="submit" class="btn btn-primary">Update Student</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Courses';
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
 $filter_level=isset($_GET['level_id'])?intval($_GET['level_id']):0;
@@ -126,7 +126,7 @@ Total: <strong><?php echo count($courses);?></strong> course(s)
 </div>
 <div class="filter-group">
 <label>Search</label>
-<input type="text" name="search" placeholder="Course code or name..." value="<?php echo htmlspecialchars($search);?>">
+<input type="text" name="search" placeholder="Course code or name..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
 </div>
 </div>
 <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -146,14 +146,14 @@ Total: <strong><?php echo count($courses);?></strong> course(s)
 <table id="courses-table">
 <thead>
 <tr>
-<th>Course Code</th>
-<th>Course Name</th>
-<th>Department</th>
-<th>Level</th>
-<th>Semester</th>
+<th scope="col">Course Code</th>
+<th scope="col">Course Name</th>
+<th scope="col">Department</th>
+<th scope="col">Level</th>
+<th scope="col">Semester</th>
 <!--th>Credits</th-->
-<th>Tokens</th>
-<th>Actions</th>
+<th scope="col">Tokens</th>
+<th scope="col">Actions</th>
 </tr>
 </thead>
 <tbody>
@@ -168,7 +168,11 @@ Total: <strong><?php echo count($courses);?></strong> course(s)
 <td><?php echo $course['token_count'];?></td>
 <td>
 <a href="edit.php?id=<?php echo $course['id'];?>" class="btn btn-primary btn-sm">Edit</a>
-<a href="delete.php?id=<?php echo $course['id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this course?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this course?')">
+    <input type="hidden" name="id" value="<?php echo $course['id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </td>
 </tr>
 <?php endforeach;?>

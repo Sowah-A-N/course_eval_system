@@ -14,6 +14,8 @@ start_secure_session();
 check_login();
 
 if ($_SESSION['role_id'] != ROLE_SECRETARY) {
+    $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
+    $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
     exit();
 }
@@ -193,8 +195,8 @@ require_once '../../includes/header.php';
         </div>
         
         <div class="form-group">
-            <label>
-                <input type="checkbox" name="is_active" class="form-checkbox" <?php echo(isset($_POST['is_active'])||!isset($_POST['f_name']))?'checked':'';?>>
+            <label for="is_active">
+                <input type="checkbox" id="is_active" name="is_active" class="form-checkbox" <?php echo(isset($_POST['is_active'])||!isset($_POST['f_name']))?'checked':'';?>>
                 <span class="form-label" style="display:inline">Active</span>
             </label>
         </div>

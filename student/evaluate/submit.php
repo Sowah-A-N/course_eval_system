@@ -68,6 +68,7 @@ $query_token = "
         l.level_name,
         s.semester_name,
         ay.year_label,
+        ay.is_active as year_is_active,
         d.dep_name
     FROM evaluation_tokens et
     JOIN courses c ON et.course_id = c.id
@@ -100,6 +101,14 @@ if ($token_data['is_used'] == 1) {
     $_SESSION['flash_message'] = 'This evaluation has already been submitted.';
     $_SESSION['flash_type'] = 'warning';
     header("Location: available_courses.php");
+    exit();
+}
+
+// Check if the evaluation period (academic year) is still active
+if (!$token_data['year_is_active']) {
+    $_SESSION['flash_message'] = 'The evaluation period for this token has closed. No further submissions are accepted.';
+    $_SESSION['flash_type'] = 'error';
+    header("Location: index.php");
     exit();
 }
 

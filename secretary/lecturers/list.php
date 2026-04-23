@@ -13,6 +13,8 @@ start_secure_session();
 check_login();
 
 if ($_SESSION['role_id'] != ROLE_SECRETARY) {
+    $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
+    $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
     exit();
 }
@@ -125,7 +127,7 @@ require_once '../../includes/header.php';
             </div>
             <div class="filter-group">
                 <label>Search</label>
-                <input type="text" name="search" placeholder="Name or email..." value="<?php echo htmlspecialchars($search);?>">
+                <input type="text" name="search" placeholder="Name or email..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
             </div>
         </div>
         <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -146,11 +148,11 @@ require_once '../../includes/header.php';
         <table id="lecturers-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Courses Assigned</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Courses Assigned</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -168,7 +170,11 @@ require_once '../../includes/header.php';
                         </td>
                         <td>
                             <a href="edit.php?id=<?php echo $lecturer['user_id'];?>" class="btn btn-primary btn-sm">Edit</a>
-                            <a href="delete.php?id=<?php echo $lecturer['user_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this lecturer?')">Delete</a>
+                            <form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this lecturer?')">
+    <input type="hidden" name="id" value="<?php echo $lecturer['user_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
                         </td>
                     </tr>
                 <?php endforeach;?>

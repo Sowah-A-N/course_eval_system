@@ -169,7 +169,7 @@ require_once '../../includes/header.php';
 
     .stats-summary {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmin(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 15px;
         margin-bottom: 20px;
     }
@@ -311,7 +311,7 @@ require_once '../../includes/header.php';
 <!-- Search -->
 <div class="search-section">
     <form method="GET" class="search-form">
-        <input type="text" name="search" class="search-input" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($search); ?>">
+        <input type="text" name="search" class="search-input" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($search); ? maxlength="100">">
         <button type="submit" class="btn btn-primary">Search</button>
         <a href="list.php" class="btn btn-secondary">Reset</a>
         <button type="button" onclick="exportTableToCSV('lecturers-table', 'lecturers.csv')" class="btn btn-success">Export CSV</button>
@@ -330,13 +330,13 @@ require_once '../../includes/header.php';
         <table id="lecturers-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Status</th>
-                    <th>Assigned Courses</th>
-                    <th>Evaluations</th>
-                    <th>Avg Rating</th>
-                    <th>Actions</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Assigned Courses</th>
+                    <th scope="col">Evaluations</th>
+                    <th scope="col">Avg Rating</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -370,7 +370,7 @@ require_once '../../includes/header.php';
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a href="assign_course.php?lecturer_id=<?php echo $lecturer['user_id']; ?>" class="btn btn-primary btn-sm">
+                            <a href="assign_courses.php?lecturer_id=<?php echo $lecturer['user_id']; ?>" class="btn btn-primary btn-sm">
                                 Assign Courses
                             </a>
                         </td>

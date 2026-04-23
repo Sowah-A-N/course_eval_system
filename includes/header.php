@@ -75,7 +75,7 @@ foreach ($_modules as $_mod => $_len) {
     <meta name="description" content="<?php echo APP_NAME; ?> - <?php echo INSTITUTION_NAME; ?>">
     <meta name="author" content="<?php echo INSTITUTION_NAME; ?>">
 
-    <title><?php echo isset($page_title) ? $page_title . ' - ' : ''; ?><?php echo APP_NAME; ?></title>
+    <title><?php echo isset($page_title) ? htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') . ' - ' : ''; ?><?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
 
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="<?php echo $base_url; ?>/assets/images/favicon.ico">
@@ -97,7 +97,7 @@ foreach ($_modules as $_mod => $_len) {
     <!-- Additional CSS can be added by individual pages -->
     <?php if (isset($additional_css)): ?>
         <?php foreach ($additional_css as $css_file): ?>
-            <link rel="stylesheet" href="<?php echo $base_url . '/' . $css_file; ?>">
+            <link rel="stylesheet" href="<?php echo htmlspecialchars($base_url . '/' . $css_file, ENT_QUOTES, 'UTF-8'); ?>">
         <?php endforeach; ?>
     <?php endif; ?>
 

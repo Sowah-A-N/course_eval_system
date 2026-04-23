@@ -473,7 +473,7 @@ require_once '../../includes/header.php';
                            name="search" 
                            id="search" 
                            placeholder="Name, Email, or Student ID"
-                           value="<?php echo htmlspecialchars($search_query); ?>">
+                           value="<?php echo htmlspecialchars($search_query); ? maxlength="100">">
                 </div>
                 
                 <!-- Sort By -->
@@ -512,33 +512,33 @@ require_once '../../includes/header.php';
             <table id="students-table">
                 <thead>
                     <tr>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=name&order=<?php echo $sort_by == 'name' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Student Name <?php echo $sort_by == 'name' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>Student ID</th>
-                        <th>
+                        <th scope="col">Student ID</th>
+                        <th scope="col">
                             <a href="?sort=email&order=<?php echo $sort_by == 'email' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Email <?php echo $sort_by == 'email' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=level&order=<?php echo $sort_by == 'level' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Level <?php echo $sort_by == 'level' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=class&order=<?php echo $sort_by == 'class' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Class <?php echo $sort_by == 'class' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=status&order=<?php echo $sort_by == 'status' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Status <?php echo $sort_by == 'status' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=completion&order=<?php echo $sort_by == 'completion' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Evaluations <?php echo $sort_by == 'completion' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>

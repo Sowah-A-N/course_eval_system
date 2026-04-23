@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_HOD){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_HOD){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $page_title='Lecturer Performance Report';
 $query="SELECT u.user_id,u.f_name,u.l_name,COUNT(DISTINCT et.token_id)as total_evals,
@@ -42,7 +42,7 @@ require_once '../../includes/header.php';
 <div class="page-header"><h1>Lecturer Performance Report</h1><p>Individual lecturer evaluation ratings</p></div>
 <div class="lecturer-table">
 <table>
-<thead><tr><th>Lecturer Name</th><th>Evaluations</th><th>Average Rating</th></tr></thead>
+<thead><tr><th scope="col">Lecturer Name</th><th scope="col">Evaluations</th><th scope="col">Average Rating</th></tr></thead>
 <tbody>
 <?php foreach($lecturers as $lec): ?>
 <tr>

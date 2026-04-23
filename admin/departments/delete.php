@@ -5,8 +5,8 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
-$dept_id=intval($_GET['id']??0);
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+$dept_id=intval($_REQUEST['id']??0);
 $page_title='Delete Department';
 $query="SELECT * FROM department WHERE t_id=?";
 $stmt=mysqli_prepare($conn,$query);
@@ -14,7 +14,7 @@ mysqli_stmt_bind_param($stmt,"i",$dept_id);
 mysqli_stmt_execute($stmt);
 $dept=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
-if(!$dept){$_SESSION['flash_message']='Department not found.';header("Location:list.php");exit();}
+if(!$dept){$_SESSION['flash_message']='Department not found.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 $query_count="SELECT COUNT(*)as count FROM user_details WHERE department_id=?";
 $stmt_count=mysqli_prepare($conn,$query_count);
 mysqli_stmt_bind_param($stmt_count,"i",$dept_id);
@@ -28,7 +28,7 @@ mysqli_stmt_execute($stmt_courses);
 $course_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_courses))['count'];
 mysqli_stmt_close($stmt_courses);
 if($_SERVER['REQUEST_METHOD']=='POST'){
-if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
+if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 if($user_count>0||$course_count>0){
 $_SESSION['flash_message']='Cannot delete department with users or courses.';
 $_SESSION['flash_type']='error';
@@ -74,6 +74,7 @@ require_once '../../includes/header.php';
 <?php else: ?>
 <p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>
 <form method="POST">
+<input type="hidden" name="id" value="<?php echo $dept_id; ?>">
 <?php csrf_token_input();?>
 <button type="submit" class="btn btn-danger">Yes, Delete Department</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

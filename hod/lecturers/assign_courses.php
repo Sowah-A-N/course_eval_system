@@ -62,9 +62,9 @@ $query_lecturers = "
     AND is_active = 1
     ORDER BY f_name, l_name
 ";
+$role_lec = ROLE_ADVISOR;
 $stmt_lec = mysqli_prepare($conn, $query_lecturers);
 mysqli_stmt_bind_param($stmt_lec, "ii", $department_id, $role_lec);
-$role_lec = ROLE_ADVISOR;
 mysqli_stmt_execute($stmt_lec);
 $result_lec = mysqli_stmt_get_result($stmt_lec);
 $lecturers = [];
@@ -334,7 +334,7 @@ require_once '../../includes/header.php';
         <strong>✓ Success!</strong> Course(s) assigned successfully.
         <div style="margin-top: 10px;">
             <a href="list.php">Back to Lecturers</a> |
-            <a href="assign_course.php">Assign More Courses</a>
+            <a href="assign_courses.php">Assign More Courses</a>
         </div>
     </div>
 <?php endif; ?>

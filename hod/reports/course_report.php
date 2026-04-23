@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_HOD){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_HOD){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $page_title='Course Performance Report';
 $query="SELECT c.course_code,c.name,COUNT(DISTINCT et.token_id)as total_evals,
@@ -42,7 +42,7 @@ require_once '../../includes/header.php';
 <div class="page-header"><h1>Course Performance Report</h1><p>Individual course evaluation ratings</p></div>
 <div class="course-table">
 <table>
-<thead><tr><th>Rank</th><th>Course Code</th><th>Course Name</th><th>Evaluations</th><th>Average Rating</th></tr></thead>
+<thead><tr><th scope="col">Rank</th><th scope="col">Course Code</th><th scope="col">Course Name</th><th scope="col">Evaluations</th><th scope="col">Average Rating</th></tr></thead>
 <tbody>
 <?php $rank=1;foreach($courses as $course):
 $class=$course['avg_rating']>=4.0?'rating-high':($course['avg_rating']>=3.0?'rating-medium':'rating-low');?>

@@ -567,30 +567,30 @@ require_once '../../includes/header.php';
             <table id="completion-table">
                 <thead>
                     <tr>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=name&order=<?php echo $sort_by == 'name' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&class_id=<?php echo $filter_class; ?>&status=<?php echo $filter_status; ?>">
                                 Student Name <?php echo $sort_by == 'name' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>Student ID</th>
-                        <th>Email</th>
-                        <th>
+                        <th scope="col">Student ID</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">
                             <a href="?sort=level&order=<?php echo $sort_by == 'level' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&class_id=<?php echo $filter_class; ?>&status=<?php echo $filter_status; ?>">
                                 Level <?php echo $sort_by == 'level' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=class&order=<?php echo $sort_by == 'class' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&class_id=<?php echo $filter_class; ?>&status=<?php echo $filter_status; ?>">
                                 Class <?php echo $sort_by == 'class' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>Completed/Total</th>
-                        <th>
+                        <th scope="col">Completed/Total</th>
+                        <th scope="col">
                             <a href="?sort=completion&order=<?php echo $sort_by == 'completion' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&class_id=<?php echo $filter_class; ?>&status=<?php echo $filter_status; ?>">
                                 Progress <?php echo $sort_by == 'completion' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th>
+                        <th scope="col">
                             <a href="?sort=status&order=<?php echo $sort_by == 'status' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&class_id=<?php echo $filter_class; ?>&status=<?php echo $filter_status; ?>">
                                 Status <?php echo $sort_by == 'status' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>

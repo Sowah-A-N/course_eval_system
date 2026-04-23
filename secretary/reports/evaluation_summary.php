@@ -21,6 +21,8 @@ start_secure_session();
 check_login();
 
 if ($_SESSION['role_id'] != ROLE_SECRETARY) {
+    $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
+    $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
     exit();
 }
@@ -199,11 +201,11 @@ require_once '../../includes/header.php';
         <table>
             <thead>
                 <tr>
-                    <th>Course Code</th>
-                    <th>Course Name</th>
-                    <th>Completed</th>
-                    <th>Total</th>
-                    <th>Completion Rate</th>
+                    <th scope="col">Course Code</th>
+                    <th scope="col">Course Name</th>
+                    <th scope="col">Completed</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">Completion Rate</th>
                 </tr>
             </thead>
             <tbody>

@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_SECRETARY){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_SECRETARY){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $page_title='Manage Classes';
 $search=isset($_GET['search'])?trim($_GET['search']):'';
@@ -66,7 +66,7 @@ Total: <strong><?php echo count($classes);?></strong> class(es)
 <form method="GET" style="display:flex;gap:10px;align-items:flex-end">
 <div class="filter-group" style="flex:1">
 <label>Search</label>
-<input type="text" name="search" placeholder="Class name or code..." value="<?php echo htmlspecialchars($search);?>">
+<input type="text" name="search" placeholder="Class name or code..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
 </div>
 <button type="submit" class="btn btn-primary">Search</button>
 <a href="list.php" class="btn btn-secondary">Reset</a>
@@ -85,10 +85,10 @@ Total: <strong><?php echo count($classes);?></strong> class(es)
 <table id="classes-table">
 <thead>
 <tr>
-<th>Class Code</th>
-<th>Class Name</th>
-<th>Students Enrolled</th>
-<th>Actions</th>
+<th scope="col">Class Code</th>
+<th scope="col">Class Name</th>
+<th scope="col">Students Enrolled</th>
+<th scope="col">Actions</th>
 </tr>
 </thead>
 <tbody>
@@ -99,7 +99,11 @@ Total: <strong><?php echo count($classes);?></strong> class(es)
 <td><?php echo $class['student_count'];?> student(s)</td>
 <td>
 <a href="edit.php?id=<?php echo $class['t_id'];?>" class="btn btn-primary btn-sm">Edit</a>
-<a href="delete.php?id=<?php echo $class['t_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this class?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this class?')">
+    <input type="hidden" name="id" value="<?php echo $class['t_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </td>
 </tr>
 <?php endforeach;?>

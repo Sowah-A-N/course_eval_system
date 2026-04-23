@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Department Report';
 $query="SELECT d.t_id,d.dep_name,COUNT(DISTINCT c.id)as course_count,COUNT(DISTINCT et.token_id)as token_count,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens,AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating FROM department d LEFT JOIN courses c ON d.t_id=c.department_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id LEFT JOIN evaluations e ON et.token=e.token LEFT JOIN responses r ON e.evaluation_id=r.evaluation_id GROUP BY d.t_id ORDER BY d.dep_name";
 $result=mysqli_query($conn,$query);

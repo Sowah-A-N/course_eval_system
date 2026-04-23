@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Users';
 $filter_role=isset($_GET['role_id'])?intval($_GET['role_id']):0;
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
@@ -131,7 +131,7 @@ Total: <strong><?php echo count($users);?></strong> user(s)
 </div>
 <div class="filter-group">
 <label>Search</label>
-<input type="text" name="search" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search);?>">
+<input type="text" name="search" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
 </div>
 </div>
 <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -151,14 +151,14 @@ Total: <strong><?php echo count($users);?></strong> user(s)
 <table id="users-table">
 <thead>
 <tr>
-<th>Name</th>
-<th>Email</th>
-<th>Username</th>
-<th>Role</th>
-<th>Department</th>
-<th>Status</th>
-<th>Created</th>
-<th>Actions</th>
+<th scope="col">Name</th>
+<th scope="col">Email</th>
+<th scope="col">Username</th>
+<th scope="col">Role</th>
+<th scope="col">Department</th>
+<th scope="col">Status</th>
+<th scope="col">Created</th>
+<th scope="col">Actions</th>
 </tr>
 </thead>
 <tbody>
@@ -181,7 +181,11 @@ $role_class='role-'.strtolower(str_replace(' ','-',ROLE_NAMES[$user['role_id']]?
 <td><?php echo date('M d, Y',strtotime($user['created_at']));?></td>
 <td>
 <a href="edit.php?id=<?php echo $user['user_id'];?>" class="btn btn-primary btn-sm">Edit</a>
-<a href="delete.php?id=<?php echo $user['user_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this user?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this user?')">
+    <input type="hidden" name="id" value="<?php echo $user['user_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </td>
 </tr>
 <?php endforeach;?>

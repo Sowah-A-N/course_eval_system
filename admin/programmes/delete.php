@@ -5,8 +5,8 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
-$prog_id=intval($_GET['id']??0);
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+$prog_id=intval($_REQUEST['id']??0);
 $page_title='Delete Programme';
 $query="SELECT p.*,d.dep_name FROM programme p LEFT JOIN department d ON p.department_id=d.t_id WHERE p.t_id=?";
 $stmt=mysqli_prepare($conn,$query);
@@ -51,6 +51,7 @@ require_once '../../includes/header.php';
 </div>
 <p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>
 <form method="POST">
+<input type="hidden" name="id" value="<?php echo $prog_id; ?>">
 <?php csrf_token_input();?>
 <button type="submit" class="btn btn-danger">Yes, Delete Programme</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

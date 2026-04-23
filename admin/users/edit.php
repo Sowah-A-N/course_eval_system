@@ -6,7 +6,7 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $user_id=intval($_GET['id']??0);
 $page_title='Edit User';
 $errors=[];
@@ -40,6 +40,7 @@ $is_active=isset($_POST['is_active'])?1:0;
 if(empty($f_name))$errors[]='First name required.';
 if(empty($l_name))$errors[]='Last name required.';
 if(empty($email))$errors[]='Email required.';
+elseif(!filter_var($email,FILTER_VALIDATE_EMAIL))$errors[]='Invalid email format.';
 if($role_id==0)$errors[]='Select role.';
 if(empty($errors)){
 $query_check="SELECT user_id FROM user_details WHERE email=? AND user_id!=?";
@@ -151,13 +152,15 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <div class="form-group">
-<label><input type="checkbox" name="is_active" <?php echo $user['is_active']?'checked':'';?>> Active</label>
+<label for="is_active"><input type="checkbox" id="is_active" name="is_active" <?php echo $user['is_active']?'checked':'';?>> Active</label>
 </div>
 <button type="submit" class="btn btn-primary">Update User</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>
 </form>
 </div>
 <script>
+const ROLES_WITH_DEPT=[<?php echo implode(',', [ROLE_HOD, ROLE_SECRETARY, ROLE_ADVISOR, ROLE_STUDENT, ROLE_QUALITY]); ?>];
+const ROLE_STUDENT_ID=<?php echo ROLE_STUDENT; ?>;
 document.getElementById('role_id').addEventListener('change',function(){
 const roleId=parseInt(this.value);
 const deptField=document.getElementById('dept-field');
@@ -168,8 +171,8 @@ deptField.style.display='none';
 studentIdField.style.display='none';
 levelField.style.display='none';
 classField.style.display='none';
-if([2,3,4,5,6].includes(roleId)){deptField.style.display='block';}
-if(roleId===5){
+if(ROLES_WITH_DEPT.includes(roleId)){deptField.style.display='block';}
+if(roleId===ROLE_STUDENT_ID){
 studentIdField.style.display='block';
 levelField.style.display='block';
 classField.style.display='block';

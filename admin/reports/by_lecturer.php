@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Lecturer Performance Report';
 $lecturers=[];
 $query_lecturers="SELECT DISTINCT u.user_id,u.f_name,u.l_name,d.dep_name FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id WHERE u.role_id=? ORDER BY u.f_name,u.l_name";

@@ -6,7 +6,7 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $course_id=intval($_GET['id']??0);
 $page_title='Edit Course';
 $errors=[];

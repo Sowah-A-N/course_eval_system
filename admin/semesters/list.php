@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Semesters';
 $query="SELECT * FROM semesters ORDER BY semester_value";
 $result=mysqli_query($conn,$query);
@@ -57,7 +57,11 @@ Total: <strong><?php echo count($semesters);?></strong> semester(s)
 <span class="semester-value">Value: <?php echo $semester['semester_value'];?></span>
 <div class="semester-actions">
 <a href="edit.php?id=<?php echo $semester['semester_id'];?>" class="btn btn-primary btn-sm" style="flex:1;text-align:center">Edit</a>
-<a href="delete.php?id=<?php echo $semester['semester_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this semester?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this semester?')">
+    <input type="hidden" name="id" value="<?php echo $semester['semester_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </div>
 </div>
 <?php endforeach;?>

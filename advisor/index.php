@@ -592,10 +592,10 @@ require_once '../includes/header.php';
             <table>
                 <thead>
                     <tr>
-                        <th>Date & Time</th>
-                        <th>Student</th>
-                        <th>Level</th>
-                        <th>Course Evaluated</th>
+                        <th scope="col">Date & Time</th>
+                        <th scope="col">Student</th>
+                        <th scope="col">Level</th>
+                        <th scope="col">Course Evaluated</th>
                     </tr>
                 </thead>
                 <tbody>

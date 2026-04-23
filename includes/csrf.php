@@ -109,6 +109,11 @@ function validate_csrf_token($token = null, $input_name = null)
         return false;
     }
 
+    // Reject expired tokens
+    if (is_csrf_token_expired()) {
+        return false;
+    }
+
     // Get the stored token
     $stored_token = $_SESSION[CSRF_TOKEN_NAME];
 
@@ -315,8 +320,18 @@ function get_csrf_token_json()
  */
 function validate_csrf_ajax()
 {
-    // Try to get token from request header
-    $headers = getallheaders();
+    // Try to get token from request header (getallheaders() not available in all SAPI environments)
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+    } else {
+        $headers = [];
+        foreach ($_SERVER as $key => $value) {
+            if (strncmp($key, 'HTTP_', 5) === 0) {
+                $header = str_replace('_', '-', substr($key, 5));
+                $headers[$header] = $value;
+            }
+        }
+    }
     if (isset($headers['X-CSRF-Token'])) {
         return validate_csrf_token($headers['X-CSRF-Token']);
     }
@@ -349,7 +364,7 @@ function validate_csrf_ajax()
 function is_csrf_token_expired($max_age = 3600)
 {
     if (!isset($_SESSION[CSRF_TOKEN_NAME . '_time'])) {
-        return false; // No timestamp, consider valid
+        return true; // No timestamp means token was not properly generated; treat as expired
     }
 
     $token_age = time() - $_SESSION[CSRF_TOKEN_NAME . '_time'];
