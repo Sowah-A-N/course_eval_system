@@ -15,7 +15,7 @@ mysqli_stmt_bind_param($stmt,"i",$question_id);
 mysqli_stmt_execute($stmt);
 $question=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
-if(!$question){$_SESSION['flash_message']='Question not found.';header("Location:list.php");exit();}
+if(!$question){$_SESSION['flash_message']='Question not found.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 // Check how many historical responses reference this question
 $stmt_rc=mysqli_prepare($conn,"SELECT COUNT(*) AS cnt FROM responses WHERE question_id=?");
 mysqli_stmt_bind_param($stmt_rc,"i",$question_id);
@@ -23,7 +23,7 @@ mysqli_stmt_execute($stmt_rc);
 $response_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_rc))['cnt'];
 mysqli_stmt_close($stmt_rc);
 if($_SERVER['REQUEST_METHOD']=='POST'){
-if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
+if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 if($response_count>0){
 $_SESSION['flash_message']='Cannot delete: this question has '.$response_count.' recorded response(s). Deactivate it instead.';
 $_SESSION['flash_type']='error';

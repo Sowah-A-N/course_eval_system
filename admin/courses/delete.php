@@ -14,7 +14,7 @@ mysqli_stmt_bind_param($stmt,"i",$course_id);
 mysqli_stmt_execute($stmt);
 $course=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
-if(!$course){$_SESSION['flash_message']='Course not found.';header("Location:list.php");exit();}
+if(!$course){$_SESSION['flash_message']='Course not found.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 $query_tokens="SELECT COUNT(*)as count FROM evaluation_tokens WHERE course_id=?";
 $stmt_tokens=mysqli_prepare($conn,$query_tokens);
 mysqli_stmt_bind_param($stmt_tokens,"i",$course_id);
@@ -22,7 +22,7 @@ mysqli_stmt_execute($stmt_tokens);
 $token_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_tokens))['count'];
 mysqli_stmt_close($stmt_tokens);
 if($_SERVER['REQUEST_METHOD']=='POST'){
-if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
+if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 if($token_count>0){
 $_SESSION['flash_message']='Cannot delete course with evaluation tokens.';
 $_SESSION['flash_type']='error';

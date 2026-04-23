@@ -15,7 +15,7 @@ mysqli_stmt_bind_param($stmt,"i",$year_id);
 mysqli_stmt_execute($stmt);
 $year=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
-if(!$year){$_SESSION['flash_message']='Academic year not found.';header("Location:list.php");exit();}
+if(!$year){$_SESSION['flash_message']='Academic year not found.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 $semesters=[];
 $stmt_sems=mysqli_prepare($conn,"SELECT * FROM semesters WHERE academic_year_id=? ORDER BY semester_value");
 mysqli_stmt_bind_param($stmt_sems,"i",$year_id);

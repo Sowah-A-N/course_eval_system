@@ -14,7 +14,7 @@ mysqli_stmt_bind_param($stmt,"i",$dept_id);
 mysqli_stmt_execute($stmt);
 $dept=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
-if(!$dept){$_SESSION['flash_message']='Department not found.';header("Location:list.php");exit();}
+if(!$dept){$_SESSION['flash_message']='Department not found.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 $query_count="SELECT COUNT(*)as count FROM user_details WHERE department_id=?";
 $stmt_count=mysqli_prepare($conn,$query_count);
 mysqli_stmt_bind_param($stmt_count,"i",$dept_id);
@@ -28,7 +28,7 @@ mysqli_stmt_execute($stmt_courses);
 $course_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_courses))['count'];
 mysqli_stmt_close($stmt_courses);
 if($_SERVER['REQUEST_METHOD']=='POST'){
-if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
+if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 if($user_count>0||$course_count>0){
 $_SESSION['flash_message']='Cannot delete department with users or courses.';
 $_SESSION['flash_type']='error';
