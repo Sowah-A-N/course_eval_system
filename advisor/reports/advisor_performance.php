@@ -640,10 +640,10 @@ require_once '../../includes/header.php';
                 <table>
                     <thead>
                         <tr>
-                            <th>Period</th>
-                            <th>Average Rating</th>
-                            <th>Number of Ratings</th>
-                            <th>Visual</th>
+                            <th scope="col">Period</th>
+                            <th scope="col">Average Rating</th>
+                            <th scope="col">Number of Ratings</th>
+                            <th scope="col">Visual</th>
                         </tr>
                     </thead>
                     <tbody>

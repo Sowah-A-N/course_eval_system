@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Academic Years';
 $query="SELECT * FROM academic_year ORDER BY start_year DESC";
 $result=mysqli_query($conn,$query);
@@ -95,7 +95,11 @@ $is_active=$active_period&&$active_period['academic_year_id']==$year['academic_y
 <div class="year-actions">
 <a href="set_active.php?id=<?php echo $year['academic_year_id'];?>" class="btn btn-success btn-sm">Set Active</a>
 <a href="edit.php?id=<?php echo $year['academic_year_id'];?>" class="btn btn-primary btn-sm">Edit</a>
-<a href="delete.php?id=<?php echo $year['academic_year_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this year?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this year?')">
+    <input type="hidden" name="id" value="<?php echo $year['academic_year_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </div>
 </div>
 <?php endforeach;?>

@@ -639,13 +639,13 @@ require_once '../../includes/header.php';
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 40%;">Question</th>
-                            <th style="width: 15%;">Category</th>
-                            <th style="width: 10%;">Responses</th>
-                            <th style="width: 10%;">Avg Rating</th>
-                            <th style="width: 10%;">Min</th>
-                            <th style="width: 10%;">Max</th>
-                            <th style="width: 5%;">Std Dev</th>
+                            <th scope="col" style="width: 40%;">Question</th>
+                            <th scope="col" style="width: 15%;">Category</th>
+                            <th scope="col" style="width: 10%;">Responses</th>
+                            <th scope="col" style="width: 10%;">Avg Rating</th>
+                            <th scope="col" style="width: 10%;">Min</th>
+                            <th scope="col" style="width: 10%;">Max</th>
+                            <th scope="col" style="width: 5%;">Std Dev</th>
                         </tr>
                     </thead>
                     <tbody>

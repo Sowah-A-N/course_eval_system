@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Evaluation Questions';
 $filter_status=isset($_GET['status'])?$_GET['status']:'active';
 $where=["1=1"];
@@ -115,7 +115,11 @@ require_once '../../includes/header.php';
 <?php else: ?>
 <a href="activate.php?id=<?php echo $question['question_id'];?>" class="btn btn-success btn-sm">Activate</a>
 <?php endif;?>
-<a href="delete.php?id=<?php echo $question['question_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this question?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this question?')">
+    <input type="hidden" name="id" value="<?php echo $question['question_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </div>
 </div>
 <?php endforeach;?>

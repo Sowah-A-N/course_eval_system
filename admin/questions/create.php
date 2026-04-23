@@ -6,7 +6,7 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Add New Question';
 $errors=[];
 $query_max="SELECT MAX(display_order) AS max_order FROM evaluation_questions";
@@ -87,8 +87,8 @@ require_once '../../includes/header.php';
 <small style="color:#666">Questions are displayed in ascending order (1, 2, 3...)</small>
 </div>
 <div class="form-group">
-<label>
-<input type="checkbox" name="is_active" class="form-checkbox" <?php echo(!isset($_POST['question_text'])||isset($_POST['is_active']))?'checked':'';?>>
+<label for="is_active">
+<input type="checkbox" id="is_active" name="is_active" class="form-checkbox" <?php echo(!isset($_POST['question_text'])||isset($_POST['is_active']))?'checked':'';?>>
 <span class="form-label" style="display:inline">Active (visible in evaluations)</span>
 </label>
 </div>

@@ -196,7 +196,7 @@ $_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? 
                 setTimeout(function() {
                     alert.remove();
                 }, 500);
-            }, 5000);
+            }, 10000);
         });
     });
 

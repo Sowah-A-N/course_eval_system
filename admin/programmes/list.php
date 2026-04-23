@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Programmes';
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
 $search=isset($_GET['search'])?trim($_GET['search']):'';
@@ -88,7 +88,7 @@ Total: <strong><?php echo count($programmes);?></strong> programme(s)
 </div>
 <div class="filter-group">
 <label>Search</label>
-<input type="text" name="search" placeholder="Programme name or code..." value="<?php echo htmlspecialchars($search);?>">
+<input type="text" name="search" placeholder="Programme name or code..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
 </div>
 </div>
 <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -114,7 +114,11 @@ Total: <strong><?php echo count($programmes);?></strong> programme(s)
 </div>
 <div class="programme-actions">
 <a href="edit.php?id=<?php echo $programme['t_id'];?>" class="btn btn-primary btn-sm" style="flex:1;text-align:center">Edit</a>
-<a href="delete.php?id=<?php echo $programme['t_id'];?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this programme?')">Delete</a>
+<form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this programme?')">
+    <input type="hidden" name="id" value="<?php echo $programme['t_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+</form>
 </div>
 </div>
 <?php endforeach;?>

@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='View Evaluation Tokens';
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
 $filter_level=isset($_GET['level_id'])?intval($_GET['level_id']):0;
@@ -165,7 +165,7 @@ Showing: <strong><?php echo count($tokens);?></strong> token(s)
 </div>
 <div class="filter-group">
 <label>Search</label>
-<input type="text" name="search" placeholder="Student or course..." value="<?php echo htmlspecialchars($search);?>">
+<input type="text" name="search" placeholder="Student or course..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
 </div>
 </div>
 <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -184,14 +184,14 @@ Showing: <strong><?php echo count($tokens);?></strong> token(s)
 <table>
 <thead>
 <tr>
-<th>Student</th>
-<th>Course</th>
-<th>Department</th>
-<th>Level</th>
-<th>Period</th>
-<th>Status</th>
-<th>Created</th>
-<th>Used</th>
+<th scope="col">Student</th>
+<th scope="col">Course</th>
+<th scope="col">Department</th>
+<th scope="col">Level</th>
+<th scope="col">Period</th>
+<th scope="col">Status</th>
+<th scope="col">Created</th>
+<th scope="col">Used</th>
 </tr>
 </thead>
 <tbody>

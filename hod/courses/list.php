@@ -331,7 +331,7 @@ require_once '../../includes/header.php';
             </div>
             <div class="filter-group">
                 <label for="search">Search</label>
-                <input type="text" name="search" id="search" placeholder="Course code or name" value="<?php echo htmlspecialchars($search); ?>">
+                <input type="text" name="search" id="search" placeholder="Course code or name" value="<?php echo htmlspecialchars($search); ? maxlength="100">">
             </div>
         </div>
         <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -352,14 +352,14 @@ require_once '../../includes/header.php';
         <table id="courses-table">
             <thead>
                 <tr>
-                    <th>Course Code</th>
-                    <th>Course Name</th>
-                    <th>Level</th>
-                    <th>Semester</th>
-                    <th>Assigned Lecturers</th>
-                    <th>Evaluations</th>
-                    <th>Completion</th>
-                    <th>Actions</th>
+                    <th scope="col">Course Code</th>
+                    <th scope="col">Course Name</th>
+                    <th scope="col">Level</th>
+                    <th scope="col">Semester</th>
+                    <th scope="col">Assigned Lecturers</th>
+                    <th scope="col">Evaluations</th>
+                    <th scope="col">Completion</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>

@@ -464,7 +464,7 @@ require_once '../../includes/header.php';
                     name="search"
                     id="search"
                     placeholder="Course code or name"
-                    value="<?php echo htmlspecialchars($search_query); ?>">
+                    value="<?php echo htmlspecialchars($search_query); ? maxlength="100">">
             </div>
 
             <!-- Sort Order -->
@@ -522,17 +522,17 @@ require_once '../../includes/header.php';
         <table id="history-table">
             <thead>
                 <tr>
-                    <th style="width: 5%;">#</th>
-                    <th style="width: 35%;">Course</th>
-                    <th style="width: 15%;">Level</th>
-                    <th style="width: 15%;">Semester</th>
-                    <th style="width: 15%;">Academic Year</th>
-                    <th style="width: 20%;">
+                    <th scope="col" style="width: 5%;">#</th>
+                    <th scope="col" style="width: 35%;">Course</th>
+                    <th scope="col" style="width: 15%;">Level</th>
+                    <th scope="col" style="width: 15%;">Semester</th>
+                    <th scope="col" style="width: 15%;">Academic Year</th>
+                    <th scope="col" style="width: 20%;">
                         <a href="?order=<?php echo $sort_order == 'DESC' ? 'asc' : 'desc'; ?>&academic_year_id=<?php echo $filter_academic_year; ?>&semester_id=<?php echo $filter_semester; ?>&search=<?php echo urlencode($search_query); ?>">
                             Submitted On <?php echo $sort_order == 'DESC' ? '↓' : '↑'; ?>
                         </a>
                     </th>
-                    <th style="width: 10%;">Status</th>
+                    <th scope="col" style="width: 10%;">Status</th>
                 </tr>
             </thead>
             <tbody>

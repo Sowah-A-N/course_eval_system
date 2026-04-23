@@ -536,14 +536,14 @@ require_once '../../includes/header.php';
         <table>
             <thead>
                 <tr>
-                    <th>Rank</th>
-                    <th>Department</th>
-                    <th>Avg Rating</th>
-                    <th>Submissions</th>
-                    <th>Total Tokens</th>
-                    <th>Completion Rate</th>
-                    <th>Students</th>
-                    <th>Courses</th>
+                    <th scope="col">Rank</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Avg Rating</th>
+                    <th scope="col">Submissions</th>
+                    <th scope="col">Total Tokens</th>
+                    <th scope="col">Completion Rate</th>
+                    <th scope="col">Students</th>
+                    <th scope="col">Courses</th>
                 </tr>
             </thead>
             <tbody>

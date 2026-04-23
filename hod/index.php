@@ -73,10 +73,10 @@ $query_stats = "
         COUNT(DISTINCT et.token_id) as total_tokens,
         COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens,
         COUNT(DISTINCT u.user_id) as total_students,
-        COUNT(DISTINCT CASE WHEN u.role_id = 2 THEN u.user_id END) as total_lecturers
+        COUNT(DISTINCT CASE WHEN u.role_id = " . ROLE_HOD . " THEN u.user_id END) as total_lecturers
     FROM courses c
     LEFT JOIN evaluation_tokens et ON c.id = et.course_id
-    LEFT JOIN user_details u ON (u.department_id = ? AND (u.role_id = 5 OR u.role_id = 2))
+    LEFT JOIN user_details u ON (u.department_id = ? AND (u.role_id = " . ROLE_STUDENT . " OR u.role_id = " . ROLE_HOD . "))
     WHERE c.department_id = ?
 ";
 

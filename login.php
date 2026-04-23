@@ -601,7 +601,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 autocorrect="off"
                                 spellcheck="false"
                                 required
-                                autofocus
+                                <?php echo empty($_POST) ? 'autofocus' : ''; ?>
                                 aria-required="true"
                                 aria-describedby="<?php echo !empty($error) ? 'login-error' : ''; ?>"
                             >

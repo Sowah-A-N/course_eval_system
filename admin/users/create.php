@@ -6,7 +6,7 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Add New User';
 $errors=[];
 $departments=[];
@@ -169,8 +169,8 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <div class="form-group">
-<label>
-<input type="checkbox" name="is_active" class="form-checkbox" <?php echo(isset($_POST['is_active'])||!isset($_POST['f_name']))?'checked':'';?>>
+<label for="is_active">
+<input type="checkbox" id="is_active" name="is_active" class="form-checkbox" <?php echo(isset($_POST['is_active'])||!isset($_POST['f_name']))?'checked':'';?>>
 <span class="form-label" style="display:inline">Active</span>
 </label>
 </div>
@@ -179,6 +179,8 @@ require_once '../../includes/header.php';
 </form>
 </div>
 <script>
+const ROLES_WITH_DEPT=[<?php echo implode(',', [ROLE_HOD, ROLE_SECRETARY, ROLE_ADVISOR, ROLE_STUDENT, ROLE_QUALITY]); ?>];
+const ROLE_STUDENT_ID=<?php echo ROLE_STUDENT; ?>;
 document.getElementById('role_id').addEventListener('change',function(){
 const roleId=parseInt(this.value);
 const deptField=document.getElementById('dept-field');
@@ -189,8 +191,8 @@ deptField.style.display='none';
 studentIdField.style.display='none';
 levelField.style.display='none';
 classField.style.display='none';
-if([2,3,4,5,6].includes(roleId)){deptField.style.display='block';}
-if(roleId===5){
+if(ROLES_WITH_DEPT.includes(roleId)){deptField.style.display='block';}
+if(roleId===ROLE_STUDENT_ID){
 studentIdField.style.display='block';
 levelField.style.display='block';
 classField.style.display='block';

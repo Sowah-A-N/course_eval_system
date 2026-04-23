@@ -21,8 +21,9 @@ require_once '../../includes/session.php';
 start_secure_session();
 check_login();
 
-if (!defined('ROLE_QUALITY')) define('ROLE_QUALITY', 6);
 if ($_SESSION['role_id'] != ROLE_ADMIN && $_SESSION['role_id'] != ROLE_QUALITY) {
+    $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
+    $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
     exit();
 }
@@ -190,14 +191,14 @@ require_once '../../includes/header.php';
         <table>
             <thead>
                 <tr>
-                    <th>Rank</th>
-                    <th>Course Code</th>
-                    <th>Course Name</th>
-                    <th>Department</th>
-                    <th>Level</th>
-                    <th>Evaluations</th>
-                    <th>Avg Rating</th>
-                    <th>Range</th>
+                    <th scope="col">Rank</th>
+                    <th scope="col">Course Code</th>
+                    <th scope="col">Course Name</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Level</th>
+                    <th scope="col">Evaluations</th>
+                    <th scope="col">Avg Rating</th>
+                    <th scope="col">Range</th>
                 </tr>
             </thead>
             <tbody>

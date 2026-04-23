@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){header("Location:../../login.php");exit();}
+if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Completion Status';
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
 $filter_level=isset($_GET['level_id'])?intval($_GET['level_id']):0;
@@ -85,14 +85,14 @@ require_once '../../includes/header.php';
 <table>
 <thead>
 <tr>
-<th>Student ID</th>
-<th>Name</th>
-<th>Department</th>
-<th>Level</th>
-<th>Completed</th>
-<th>Total</th>
-<th>Progress</th>
-<th>Status</th>
+<th scope="col">Student ID</th>
+<th scope="col">Name</th>
+<th scope="col">Department</th>
+<th scope="col">Level</th>
+<th scope="col">Completed</th>
+<th scope="col">Total</th>
+<th scope="col">Progress</th>
+<th scope="col">Status</th>
 </tr>
 </thead>
 <tbody>
