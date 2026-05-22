@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS `academic_year` (
   `academic_year_id` int NOT NULL AUTO_INCREMENT,
   `start_year` int NOT NULL,
   `end_year` int AS ((`start_year` + 1)) PERSISTENT,
-  `year_label` varchar(9) COLLATE utf8mb4_unicode_ci AS (concat(`start_year`, '/', `end_year`)) PERSISTENT,
+  `year_label` varchar(9) COLLATE utf8mb4_unicode_ci AS (concat(`start_year`, '/', (`start_year` + 1))) PERSISTENT,
   `is_active` tinyint(1) DEFAULT '0',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`academic_year_id`),
