@@ -23,6 +23,58 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// ============================================
+// SECURITY RESPONSE HEADERS
+// ============================================
+// Applied on every authenticated page rendered through this header.
+// Must be set before any output is sent.
+
+// Prevent this page from being embedded in a frame on another origin
+// (clickjacking defence).
+header('X-Frame-Options: DENY');
+
+// Stop browsers from MIME-sniffing the response away from the declared
+// Content-Type (prevents drive-by download / XSS via content confusion).
+header('X-Content-Type-Options: nosniff');
+
+// Only send the origin (no path or query string) as the Referer header
+// to external resources, preventing session tokens or tokens in URLs
+// from leaking to third-party servers.
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
+// Content Security Policy — restricts where scripts, styles and other
+// resources may be loaded from.
+// - default-src 'self'        : only same-origin resources by default.
+// - script-src 'self' 'unsafe-inline' : inline <script> blocks are still
+//   required because this codebase uses them; 'unsafe-inline' should be
+//   removed once scripts are moved to external files (Phase 4 refactor).
+// - style-src  'self' 'unsafe-inline' : inline <style> blocks are used
+//   throughout; same caveat applies.
+// - img-src    'self' data:           : data: URIs are used for icons.
+// - object-src 'none'                 : disallow Flash / plugins.
+// - base-uri   'self'                 : prevent <base> hijacking.
+// - form-action 'self'                : forms may only POST to same origin.
+header(
+    "Content-Security-Policy: " .
+    "default-src 'self'; " .
+    "script-src 'self' 'unsafe-inline'; " .
+    "style-src 'self' 'unsafe-inline'; " .
+    "img-src 'self' data:; " .
+    "object-src 'none'; " .
+    "base-uri 'self'; " .
+    "form-action 'self';"
+);
+
+// Instruct browsers to always use HTTPS for this origin once visited.
+// Only sent in production (HTTPS) so that local HTTP dev is not broken.
+if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+}
+
+// Disable browser features that are unnecessary for this application.
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+// ============================================
+
 // Load constants if not already loaded
 if (!defined('APP_NAME')) {
     require_once dirname(__DIR__) . '/config/constants.php';
@@ -331,7 +383,14 @@ foreach ($_modules as $_mod => $_len) {
                 <div class="user-name"><?php echo htmlspecialchars($user_name); ?></div>
                 <div class="user-role"><?php echo htmlspecialchars($user_role_name); ?></div>
             </div>
-            <a href="<?php echo $base_url; ?>/logout.php" class="logout-btn">Logout</a>
+            <form method="POST" action="<?php echo $base_url; ?>/logout.php"
+                  id="logout-form" style="display:inline;margin:0;padding:0">
+                <?php csrf_token_input(); ?>
+                <button type="submit" class="logout-btn"
+                        style="background:none;border:none;cursor:pointer;font:inherit">
+                    Logout
+                </button>
+            </form>
         </div>
     </div>
 

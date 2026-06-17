@@ -23,7 +23,7 @@ require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
 
-if ($_SESSION['role_id'] != ROLE_HOD) {
+if ($_SESSION['role_id'] !== ROLE_HOD) {
     $_SESSION['flash_message'] = 'Access denied.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");

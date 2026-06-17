@@ -29,7 +29,7 @@ start_secure_session();
 check_login();
 
 // Check if user is a student
-if ($_SESSION['role_id'] != ROLE_STUDENT) {
+if ($_SESSION['role_id'] !== ROLE_STUDENT) {
     $_SESSION['flash_message'] = 'Access denied. This page is only for students.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
@@ -47,7 +47,12 @@ $page_title = 'Evaluation History';
 $filter_academic_year = isset($_GET['academic_year_id']) ? intval($_GET['academic_year_id']) : 0;
 $filter_semester = isset($_GET['semester_id']) ? intval($_GET['semester_id']) : 0;
 $search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
-$sort_order = isset($_GET['order']) && $_GET['order'] == 'asc' ? 'ASC' : 'DESC';
+// Explicit allowlist — the value is interpolated directly into the SQL ORDER BY
+// clause and must never reach that point without a strict whitelist check.
+$sort_order = strtoupper(trim($_GET['order'] ?? 'DESC'));
+if (!in_array($sort_order, ['ASC', 'DESC'], true)) {
+    $sort_order = 'DESC';
+}
 
 // Get all academic years for filter
 $query_years = "

@@ -160,9 +160,18 @@ $_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? 
                 alert('Your session will expire in ' + minutes + ' minute(s) due to inactivity. Please refresh the page to continue.');
             }
 
-            // Redirect to login if session expired
+            // Submit the logout form on inactivity timeout.
+            // Direct window.location navigation would be a GET request, which
+            // logout.php now rejects (it requires POST + CSRF token).
             if (timeUntilTimeout <= 0) {
-                window.location.href = <?php echo json_encode($base_url . '/logout.php', JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+                const logoutForm = document.getElementById('logout-form');
+                if (logoutForm) {
+                    logoutForm.submit();
+                } else {
+                    // Fallback: redirect to login if the form is somehow absent
+                    // (e.g. unauthenticated pages that include footer but not header)
+                    window.location.href = <?php echo json_encode($base_url . '/login.php', JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+                }
             }
         }, 60000); // Check every minute
     })();

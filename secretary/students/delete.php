@@ -5,9 +5,9 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_SECRETARY){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_SECRETARY){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
-$student_id=intval($_REQUEST['id']??0);
+$student_id=intval($_GET["id"]??0);
 $page_title='Delete Student';
 // Get student (department scope)
 $query="SELECT * FROM user_details WHERE user_id=? AND department_id=? AND role_id=?";

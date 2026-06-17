@@ -5,7 +5,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $class_id=intval($_GET['class_id']??0);
 $page_title='Unassign Advisor';
 $query="SELECT c.*,d.dep_name,u.f_name,u.l_name,u.email FROM classes c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN user_details u ON c.advisor_user_id=u.user_id WHERE c.t_id=?";

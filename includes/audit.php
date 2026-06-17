@@ -51,9 +51,14 @@ function log_audit(
         return false;
     }
 
+    // record_id is a primary-key integer — bind as 'i', not 's'.
+    // Binding an int column as a string forces MySQL to cast on every insert;
+    // more importantly it breaks strict-mode servers that enforce column types.
+    $record_id = $record_id !== null ? (int)$record_id : null;
+
     mysqli_stmt_bind_param(
         $stmt,
-        'isssssss',
+        'ississss',    // i=user_id, s=action_type, s=table_name, i=record_id, s=old_json, s=new_json, s=ip, s=ua
         $user_id,
         $action_type,
         $table_name,

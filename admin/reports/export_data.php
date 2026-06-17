@@ -5,7 +5,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Export Data';
 if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['action'])&&$_POST['action']==='download'){
 if(!validate_csrf_token()){http_response_code(403);die('Invalid security token.');}
@@ -24,15 +24,40 @@ header('Content-Type:text/csv');
 header('Content-Disposition:attachment;filename="evaluation_export_'.date('Y-m-d').'.csv"');
 $output=fopen('php://output','w');
 if($type=='evaluations'){
-fputcsv($output,['Evaluation ID','Student ID','Course Code','Course Name','Lecturer(s)','Department','Date','Status']);
-$query="SELECT e.evaluation_id,u.unique_id,c.course_code,c.name,GROUP_CONCAT(DISTINCT CONCAT(l.f_name,' ',l.l_name) SEPARATOR '; ')as lecturer_name,d.dep_name,e.evaluation_date,et.is_used FROM evaluations e JOIN evaluation_tokens et ON e.token=et.token JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.is_active=1 LEFT JOIN user_details l ON cl.lecturer_user_id=l.user_id LEFT JOIN department d ON c.department_id=d.t_id GROUP BY e.evaluation_id,u.unique_id,c.course_code,c.name,d.dep_name,e.evaluation_date,et.is_used ORDER BY e.evaluation_date DESC";
+// ANONYMITY: Student identity (unique_id) is deliberately excluded from this
+// export.  The evaluations table stores only an opaque token — not student_user_id.
+// Including u.unique_id by joining evaluation_tokens → user_details would
+// de-anonymise every evaluation (any reader could correlate evaluation_id → student
+// and then pull their exact ratings from the responses export).
+// The export therefore contains only aggregate/course data, not the submitting student.
+fputcsv($output,['Evaluation ID','Course Code','Course Name','Lecturer(s)','Department','Date']);
+$query="SELECT e.evaluation_id,c.course_code,c.name,
+    GROUP_CONCAT(DISTINCT CONCAT(l.f_name,' ',l.l_name) SEPARATOR '; ') AS lecturer_name,
+    d.dep_name,e.evaluation_date
+    FROM evaluations e
+    JOIN evaluation_tokens et ON e.token=et.token
+    JOIN courses c ON et.course_id=c.id
+    LEFT JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.is_active=1
+    LEFT JOIN user_details l ON cl.lecturer_user_id=l.user_id
+    LEFT JOIN department d ON c.department_id=d.t_id
+    GROUP BY e.evaluation_id,c.course_code,c.name,d.dep_name,e.evaluation_date
+    ORDER BY e.evaluation_date DESC";
 $result=mysqli_query($conn,$query);
 while($row=mysqli_fetch_assoc($result)){
-fputcsv($output,csv_safe([$row['evaluation_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['lecturer_name'],$row['dep_name'],$row['evaluation_date'],$row['is_used']?'Used':'Unused']));
+fputcsv($output,csv_safe([$row['evaluation_id'],$row['course_code'],$row['name'],$row['lecturer_name'],$row['dep_name'],$row['evaluation_date']]));
 }
 }elseif($type=='tokens'){
+// Token export shows which students have been assigned tokens and whether each
+// was used — this is operational data (not evaluation content) and is appropriate
+// for admin review.  student_user_id is included here because this is pre/post
+// submission housekeeping, not the evaluation data itself.
 fputcsv($output,['Token ID','Student ID','Course Code','Course Name','Department','Created Date','Used']);
-$query="SELECT et.token_id,u.unique_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used FROM evaluation_tokens et JOIN user_details u ON et.student_user_id=u.user_id JOIN courses c ON et.course_id=c.id LEFT JOIN department d ON c.department_id=d.t_id ORDER BY et.created_at DESC";
+$query="SELECT et.token_id,u.unique_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used
+    FROM evaluation_tokens et
+    JOIN user_details u ON et.student_user_id=u.user_id
+    JOIN courses c ON et.course_id=c.id
+    LEFT JOIN department d ON c.department_id=d.t_id
+    ORDER BY et.created_at DESC";
 $result=mysqli_query($conn,$query);
 while($row=mysqli_fetch_assoc($result)){
 fputcsv($output,csv_safe([$row['token_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['dep_name'],$row['created_at'],$row['is_used']?'Yes':'No']));

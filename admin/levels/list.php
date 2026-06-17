@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Manage Academic Levels';
 $query="SELECT l.*,COUNT(DISTINCT u.user_id)as student_count,COUNT(DISTINCT c.id)as course_count FROM level l LEFT JOIN user_details u ON l.t_id=u.level_id AND u.role_id=? LEFT JOIN courses c ON l.t_id=c.level_id GROUP BY l.t_id ORDER BY l.level_number";
 $stmt=mysqli_prepare($conn,$query);

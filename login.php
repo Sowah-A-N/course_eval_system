@@ -60,21 +60,53 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = MSG_ERROR_REQUIRED_FIELDS;
         } else {
 
-            // IP-based login rate limiting
-            $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-            $lockout_time = LOGIN_LOCKOUT_TIME; // bind_param requires variables, not constants
-            $stmt_check = mysqli_prepare($conn,
+            // ── Rate limiting ────────────────────────────────────────────────
+            // Two independent counters are maintained:
+            //
+            //   1. Per-IP  — blocks a single machine from hammering any account.
+            //                Threshold: MAX_LOGIN_ATTEMPTS within LOGIN_LOCKOUT_TIME seconds.
+            //
+            //   2. Per-username — blocks distributed password spray against one account.
+            //                The per-username threshold is intentionally higher (3×) because
+            //                false positives here lock out a real user, not just an IP.
+            //                Threshold: MAX_LOGIN_ATTEMPTS * 3 within LOGIN_LOCKOUT_TIME seconds.
+            //
+            // University campus / NAT note: all students may share one outbound IP.
+            // The per-IP threshold is therefore set generously (see constants.php), but
+            // the per-username counter provides a backstop that cannot be NAT-bypassed.
+
+            $ip           = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+            $lockout_time = LOGIN_LOCKOUT_TIME; // bind_param requires a variable, not a constant
+            $max_attempts = MAX_LOGIN_ATTEMPTS;
+
+            // — Per-IP check —
+            $stmt_ip = mysqli_prepare($conn,
                 "SELECT COUNT(*) AS attempt_count FROM login_attempts
                  WHERE ip_address = ? AND attempted_at > DATE_SUB(NOW(), INTERVAL ? SECOND)");
-            mysqli_stmt_bind_param($stmt_check, 'si', $ip, $lockout_time);
-            mysqli_stmt_execute($stmt_check);
-            $attempt_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_check));
-            mysqli_stmt_close($stmt_check);
+            mysqli_stmt_bind_param($stmt_ip, 'si', $ip, $lockout_time);
+            mysqli_stmt_execute($stmt_ip);
+            $ip_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_ip));
+            mysqli_stmt_close($stmt_ip);
 
-            if ($attempt_row && (int)$attempt_row['attempt_count'] >= MAX_LOGIN_ATTEMPTS) {
-                $error = MSG_ERROR_ACCOUNT_LOCKED;
+            // — Per-username check —
+            $uname_check   = substr($username_email, 0, 100);
+            $max_per_uname = $max_attempts * 3; // higher cap to avoid locking real users
+            $stmt_un = mysqli_prepare($conn,
+                "SELECT COUNT(*) AS attempt_count FROM login_attempts
+                 WHERE username_attempted = ? AND attempted_at > DATE_SUB(NOW(), INTERVAL ? SECOND)");
+            mysqli_stmt_bind_param($stmt_un, 'si', $uname_check, $lockout_time);
+            mysqli_stmt_execute($stmt_un);
+            $uname_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_un));
+            mysqli_stmt_close($stmt_un);
+
+            $ip_blocked    = $ip_row    && (int)$ip_row['attempt_count']    >= $max_attempts;
+            $uname_blocked = $uname_row && (int)$uname_row['attempt_count'] >= $max_per_uname;
+
+            if ($ip_blocked || $uname_blocked) {
+                $reason = $ip_blocked ? 'ip_rate_limited' : 'username_rate_limited';
+                $error  = MSG_ERROR_ACCOUNT_LOCKED;
                 log_audit($conn, null, AUDIT_LOGIN_FAILED, null, null,
-                    ['reason' => 'rate_limited', 'ip' => $ip, 'username' => $username_email], null);
+                    ['reason' => $reason, 'ip' => $ip, 'username' => $username_email], null);
             } else {
 
                 // Prepare query to find user by username or email
@@ -107,7 +139,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 mysqli_stmt_execute($stmt_clear);
                                 mysqli_stmt_close($stmt_clear);
 
-                                // Set session variables
+                                // Regenerate session ID BEFORE writing any session data.
+                                // PHP copies existing session data to the new ID, so the
+                                // redirect_after_login value stored before login is preserved.
+                                // Calling regenerate AFTER the writes is safe on file-based
+                                // sessions but can silently drop data on some custom handlers
+                                // (Redis, Memcached) that don't auto-copy on regenerate.
+                                session_regenerate_id(true);
+
+                                // Set session variables on the fresh session ID
                                 $_SESSION['user_id']       = (int)$user['user_id'];
                                 $_SESSION['role_id']       = (int)$user['role_id'];
                                 $_SESSION['department_id'] = $user['department_id'] ? (int)$user['department_id'] : null;
@@ -117,21 +157,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 $_SESSION['email']         = $user['email'];
                                 $_SESSION['full_name']     = $user['f_name'] . ' ' . $user['l_name'];
                                 $_SESSION['last_activity'] = time();
+                                $_SESSION['session_start'] = time();
                                 $_SESSION['login_time']    = time();
-
-                                // Regenerate session ID for security (prevents session fixation)
-                                session_regenerate_id(true);
 
                                 // Log successful login
                                 log_audit($conn, $user['user_id'], AUDIT_LOGIN,
                                     TABLE_USER_DETAILS, $user['user_id'], null, null);
 
-                                // Redirect to the page the user originally tried to access
+                                // Redirect to the page the user originally tried to access,
+                                // but re-validate the URL at the point of use — the value was
+                                // checked when stored but URL-encoded variants (e.g. /%5C) can
+                                // bypass strpos checks that operate on raw bytes.
                                 if (!empty($_SESSION['redirect_after_login'])) {
                                     $redirect_url = $_SESSION['redirect_after_login'];
                                     unset($_SESSION['redirect_after_login']);
-                                    header("Location: " . $redirect_url);
-                                    exit();
+
+                                    // parse_url extracts only the path component; any scheme,
+                                    // host, or authority makes parse_url return them separately,
+                                    // so we require: no scheme, no host, path starts with '/'.
+                                    $parsed = parse_url($redirect_url);
+                                    $safe   = isset($parsed['path'])
+                                        && !isset($parsed['scheme'])
+                                        && !isset($parsed['host'])
+                                        && strpos($parsed['path'], '/') === 0
+                                        && strpos($redirect_url, '\\') === false;
+
+                                    if ($safe) {
+                                        header("Location: " . $redirect_url);
+                                        exit();
+                                    }
+                                    // URL failed re-validation — fall through to role-based redirect
                                 }
                                 unset($_SESSION['redirect_after_login']);
 
@@ -650,6 +705,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 </svg>
                             </button>
                         </div>
+                    </div>
+
+                    <!-- Forgot password -->
+                    <div style="text-align:right;margin-bottom:18px;margin-top:-10px">
+                        <a href="forgot_password.php"
+                           style="font-size:13px;color:var(--color-primary);text-decoration:none">
+                            Forgot your password?
+                        </a>
                     </div>
 
                     <!-- Submit -->

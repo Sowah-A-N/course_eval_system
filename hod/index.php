@@ -27,7 +27,7 @@ start_secure_session();
 check_login();
 
 // Check if user is HOD
-if ($_SESSION['role_id'] != ROLE_HOD) {
+if ($_SESSION['role_id'] !== ROLE_HOD) {
     $_SESSION['flash_message'] = 'Access denied. This page is only for Heads of Department.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../index.php");

@@ -4,7 +4,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Lecturer Performance Report';
 $lecturers=[];
 $query_lecturers="SELECT DISTINCT u.user_id,u.f_name,u.l_name,d.dep_name FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id WHERE u.role_id=? ORDER BY u.f_name,u.l_name";
@@ -26,7 +26,20 @@ mysqli_stmt_execute($stmt);
 $report_data=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if($report_data){
-$query_courses="SELECT c.course_code,c.name as course_name,COUNT(DISTINCT e.evaluation_id)as response_count FROM evaluation_tokens et JOIN courses c ON et.course_id=c.id LEFT JOIN evaluations e ON et.token=e.token WHERE et.course_id IN (SELECT cl.course_id FROM course_lecturers cl WHERE cl.lecturer_user_id=? AND cl.is_active=1) GROUP BY c.id HAVING response_count>=? ORDER BY c.course_code";
+// JOIN replaces the correlated IN(SELECT …) subquery.
+// The correlated subquery was re-executed for every row in evaluation_tokens;
+// the JOIN lets the optimiser pick the cheapest join order and use the index
+// on course_lecturers(lecturer_user_id, course_id, is_active) directly.
+$query_courses="SELECT c.course_code,c.name as course_name,COUNT(DISTINCT e.evaluation_id)as response_count
+    FROM evaluation_tokens et
+    JOIN course_lecturers cl ON et.course_id=cl.course_id
+                             AND cl.lecturer_user_id=?
+                             AND cl.is_active=1
+    JOIN courses c ON et.course_id=c.id
+    LEFT JOIN evaluations e ON et.token=e.token
+    GROUP BY c.id
+    HAVING response_count>=?
+    ORDER BY c.course_code";
 $stmt_courses=mysqli_prepare($conn,$query_courses);
 mysqli_stmt_bind_param($stmt_courses,"ii",$filter_lecturer,$min_responses);
 mysqli_stmt_execute($stmt_courses);
@@ -35,7 +48,13 @@ $courses_data=[];
 while($row=mysqli_fetch_assoc($result_courses))$courses_data[]=$row;
 mysqli_stmt_close($stmt_courses);
 $report_data['courses']=$courses_data;
-$query_overall="SELECT AVG(CAST(r.response_value AS DECIMAL(10,2)))as overall_avg,COUNT(DISTINCT e.evaluation_id)as total_evaluations FROM responses r JOIN evaluations e ON r.evaluation_id=e.evaluation_id JOIN evaluation_tokens et ON e.token=et.token WHERE et.course_id IN (SELECT cl.course_id FROM course_lecturers cl WHERE cl.lecturer_user_id=? AND cl.is_active=1)";
+$query_overall="SELECT AVG(CAST(r.response_value AS DECIMAL(10,2)))as overall_avg,COUNT(DISTINCT e.evaluation_id)as total_evaluations
+    FROM responses r
+    JOIN evaluations e ON r.evaluation_id=e.evaluation_id
+    JOIN evaluation_tokens et ON e.token=et.token
+    JOIN course_lecturers cl ON et.course_id=cl.course_id
+                             AND cl.lecturer_user_id=?
+                             AND cl.is_active=1";
 $stmt_overall=mysqli_prepare($conn,$query_overall);
 mysqli_stmt_bind_param($stmt_overall,"i",$filter_lecturer);
 mysqli_stmt_execute($stmt_overall);

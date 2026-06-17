@@ -30,7 +30,7 @@ start_secure_session();
 check_login();
 
 // Check if user is a student
-if ($_SESSION['role_id'] != ROLE_STUDENT) {
+if ($_SESSION['role_id'] !== ROLE_STUDENT) {
     $_SESSION['flash_message'] = 'Access denied. This page is only for students.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
@@ -41,10 +41,67 @@ if ($_SESSION['role_id'] != ROLE_STUDENT) {
 $student_id = $_SESSION['user_id'];
 $student_name = $_SESSION['full_name'];
 
-// Get token from URL
-$token = isset($_GET['token']) ? trim($_GET['token']) : '';
+// ── Token acquisition (POST-Redirect-GET pattern) ───────────────────────────
+//
+// WHY: passing the token in a GET query string (?token=abc…) causes it to be
+// recorded in web-server access logs, CDN logs, proxy logs, and browser history.
+// A stolen token can be replayed to submit a fraudulent evaluation on behalf of
+// the student.
+//
+// HOW: available_courses.php now POSTs the token here.  On receipt we validate
+// the format, store it in the session under a one-time key, and redirect to this
+// same page with a clean URL (no query string).  The clean GET reads the token
+// from the session and removes it immediately so it can only be consumed once.
+//
+// Three entry paths:
+//   1. POST with $_POST['token']     → first entry from available_courses.php
+//   2. GET with $_SESSION key set    → after the PRG redirect (normal render)
+//   3. POST with $_POST['responses'] → evaluation form submission
+//
+// Path 3 is handled below in the "Process form submission" block; the token for
+// that path is already stored in $_SESSION['pending_eval_token'] from path 1.
 
-if (empty($token)) {
+$expected_token_length = TOKEN_LENGTH * 2; // 32 bytes → 64 hex chars
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['token']) && !isset($_POST['responses'])) {
+    // ── Path 1: initial POST from available_courses.php ─────────────────────
+    // Validate CSRF (the form in available_courses.php includes a token).
+    if (!validate_csrf_token()) {
+        $_SESSION['flash_message'] = 'Invalid security token.';
+        $_SESSION['flash_type']    = 'error';
+        header("Location: available_courses.php");
+        exit();
+    }
+
+    $token = trim($_POST['token']);
+
+    // Format check before any DB access
+    if (empty($token) || strlen($token) !== $expected_token_length || !ctype_xdigit($token)) {
+        $_SESSION['flash_message'] = 'Invalid evaluation token.';
+        $_SESSION['flash_type']    = 'error';
+        header("Location: available_courses.php");
+        exit();
+    }
+
+    // Store in session and redirect to clean URL (POST-Redirect-GET)
+    $_SESSION['pending_eval_token'] = $token;
+    header("Location: submit.php");
+    exit();
+}
+
+// ── Path 2 / Path 3: GET render or evaluation form POST ─────────────────────
+// Read the token from the session key set in Path 1.
+// On a GET render we leave the key in place so the form can be displayed.
+// On a form POST (Path 3) we will clear it after successful submission below.
+$token = $_SESSION['pending_eval_token'] ?? '';
+
+$expected_token_length = TOKEN_LENGTH * 2; // 32 bytes → 64 hex chars
+
+if (
+    empty($token) ||
+    strlen($token) !== $expected_token_length ||
+    !ctype_xdigit($token)
+) {
     $_SESSION['flash_message'] = 'Invalid evaluation token.';
     $_SESSION['flash_type'] = 'error';
     header("Location: available_courses.php");
@@ -98,6 +155,7 @@ if (!$token_data) {
 
 // Check if token already used
 if ($token_data['is_used'] == 1) {
+    unset($_SESSION['pending_eval_token']); // consumed — remove from session
     $_SESSION['flash_message'] = 'This evaluation has already been submitted.';
     $_SESSION['flash_type'] = 'warning';
     header("Location: available_courses.php");
@@ -236,10 +294,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             mysqli_stmt_close($stmt_response);
 
-            // Mark token as used
+            // Mark token as used AND sever the student→evaluation link.
+            //
+            // ANONYMITY FIX (#14): evaluation_tokens.student_user_id is the only
+            // field that links a submitted evaluation back to a named student.
+            // The evaluations table itself stores only the opaque token — not the
+            // student's identity — which was the intended anonymity boundary.
+            // However, any code (or DBA) that joins evaluations → evaluation_tokens
+            // → user_details can trivially reverse that boundary while student_user_id
+            // is populated.
+            //
+            // Resolution: after a successful submission, NULL-out student_user_id in
+            // the same atomic UPDATE that marks the token as used.  This means:
+            //   - The WHERE et.student_user_id = ? guard in the token-validation query
+            //     above already ran before we reach this point (the token belonged to
+            //     this student) — the check is safe to remove the FK post-commit.
+            //   - Completion-status reports count used tokens by is_used = 1, not by
+            //     student_user_id, so they are unaffected.
+            //   - The student's own "available courses" page uses student_user_id to
+            //     list their tokens — but only UNUSED tokens (is_used = 0).  After
+            //     submission the token is used, so it would not appear in the pending
+            //     list regardless; we render it as "✓ Evaluation Complete" via is_used.
+            //
+            // NOTE: The evaluation_tokens.student_user_id column must be made nullable
+            // in the schema (default: NOT NULL).  Apply the migration before deploying:
+            //   ALTER TABLE evaluation_tokens
+            //       MODIFY COLUMN student_user_id INT(11) NULL;
+            // See /database/migrations/002_nullable_student_user_id.sql
             $query_update_token = "
                 UPDATE evaluation_tokens
-                SET is_used = 1, used_at = NOW()
+                SET is_used = 1, used_at = NOW(), student_user_id = NULL
                 WHERE token = ?
             ";
 
@@ -250,6 +334,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             // Commit transaction
             mysqli_commit($conn);
+
+            // Clear the one-time session token now that submission succeeded.
+            // This prevents the form being re-displayed if the student presses
+            // Back, and removes the token from session storage.
+            unset($_SESSION['pending_eval_token']);
 
             // Redirect to success page
             $_SESSION['flash_message'] = 'Your evaluation has been submitted successfully!';
@@ -682,6 +771,27 @@ require_once '../../includes/header.php';
     // Initialize progress
     updateProgress();
 
+    // ── Submission state flag ────────────────────────────────────────────
+    // Tracks whether the student has confirmed and submitted the form in
+    // this page-load.  Used by TWO separate fixes:
+    //
+    //   Fix #29 — beforeunload false positive:
+    //     Without this flag, clicking "Submit" fires the beforeunload
+    //     warning ("unsaved responses") even during a normal submission
+    //     because the browser briefly unloads the page before the server
+    //     redirect arrives.  Guarding on `submitted` suppresses the dialog
+    //     for a genuine submit while preserving it for a real navigation away.
+    //
+    //   Fix #30 — re-enable on back-navigation:
+    //     If the student hits the browser Back button after submitting, the
+    //     page reloads from cache with the form fully enabled again.  The
+    //     server will correctly reject a second submission (token already
+    //     used), but the student doesn't know that until after they re-fill
+    //     the entire form — a frustrating experience.  The PHP flag below
+    //     locks the form immediately on page load when the token is already
+    //     spent, preventing any re-entry attempt.
+    let submitted = false;
+
     // Form submission confirmation
     form.addEventListener('submit', function(e) {
         const answeredQuestions = form.querySelectorAll('input[type="radio"]:checked').length;
@@ -697,13 +807,21 @@ require_once '../../includes/header.php';
             return false;
         }
 
+        // Mark as submitted BEFORE changing the button text so that the
+        // beforeunload handler sees the flag immediately if the browser
+        // fires it synchronously during the same event loop tick.
+        submitted = true;
+
         // Show loading state
         submitBtn.textContent = 'Submitting...';
         submitBtn.disabled = true;
     });
 
-    // Warn before leaving page if form has answers
+    // Warn before leaving page if form has answers — but NOT during a
+    // legitimate submission (see `submitted` flag explanation above).
     window.addEventListener('beforeunload', function(e) {
+        if (submitted) return;   // Normal submit in progress — no warning
+
         const answeredQuestions = form.querySelectorAll('input[type="radio"]:checked').length;
 
         if (answeredQuestions > 0 && answeredQuestions < totalQuestions) {
@@ -712,6 +830,23 @@ require_once '../../includes/header.php';
             return e.returnValue;
         }
     });
+
+    // Fix #30 — Lock the form on page load if this token is already used.
+    // This covers the browser-Back scenario: the page is served from cache
+    // with JS state reset, so the `submitted` flag above is no longer set.
+    // PHP passes the current is_used value into JS so we can act immediately
+    // without an extra round-trip.
+    const tokenAlreadyUsed = <?php echo $token_data['is_used'] ? 'true' : 'false'; ?>;
+    if (tokenAlreadyUsed) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '✓ Already Submitted';
+        submitBtn.style.opacity = '0.6';
+        submitBtn.style.cursor = 'not-allowed';
+        // Disable all radio inputs so the form looks and feels locked
+        form.querySelectorAll('input[type="radio"]').forEach(function(r) {
+            r.disabled = true;
+        });
+    }
 </script>
 
 <?php

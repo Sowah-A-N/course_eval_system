@@ -19,11 +19,12 @@
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
+require_once '../../includes/csrf.php';
 
 start_secure_session();
 check_login();
 
-if ($_SESSION['role_id'] != ROLE_SECRETARY) {
+if ($_SESSION['role_id'] !== ROLE_SECRETARY) {
     $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
@@ -41,11 +42,27 @@ mysqli_stmt_execute($stmt_dept);
 $department = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_dept));
 mysqli_stmt_close($stmt_dept);
 
-// Handle export requests
-if (isset($_GET['export'])) {
-    $export_type = $_GET['export'];
+// ── Export handler ───────────────────────────────────────────────────────────
+// Exports MUST be POST + CSRF so that third-party pages cannot silently trigger
+// a download in the secretary's browser (CSRF drive-by download).
+// Allowed export types are validated against an explicit allowlist to prevent
+// header injection in the Content-Disposition filename.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
 
-    // Set headers for CSV download
+    if (!validate_csrf_token()) {
+        http_response_code(403);
+        die('Invalid security token. Please go back and try again.');
+    }
+
+    // Strict allowlist — the value goes directly into the filename header
+    $allowed_types = ['students', 'lecturers', 'courses', 'classes'];
+    $export_type   = $_POST['export'];
+    if (!in_array($export_type, $allowed_types, true)) {
+        http_response_code(400);
+        die('Invalid export type.');
+    }
+
+    // Safe filename: allowlisted value + date — no user input reaches the header
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $export_type . '_' . date('Y-m-d') . '.csv"');
 
@@ -345,7 +362,11 @@ require_once '../../includes/header.php';
         <div class="export-title">Students</div>
         <div class="export-count"><?php echo $counts['students']; ?></div>
         <div class="export-label">Total Records</div>
-        <a href="?export=students" class="btn-export">📥 Export Students CSV</a>
+        <form method="POST">
+            <?php csrf_token_input(); ?>
+            <input type="hidden" name="export" value="students">
+            <button type="submit" class="btn-export">📥 Export Students CSV</button>
+        </form>
     </div>
 
     <!-- Lecturers Export -->
@@ -354,7 +375,11 @@ require_once '../../includes/header.php';
         <div class="export-title">Lecturers</div>
         <div class="export-count"><?php echo $counts['lecturers']; ?></div>
         <div class="export-label">Total Records</div>
-        <a href="?export=lecturers" class="btn-export">📥 Export Lecturers CSV</a>
+        <form method="POST">
+            <?php csrf_token_input(); ?>
+            <input type="hidden" name="export" value="lecturers">
+            <button type="submit" class="btn-export">📥 Export Lecturers CSV</button>
+        </form>
     </div>
 
     <!-- Courses Export -->
@@ -363,7 +388,11 @@ require_once '../../includes/header.php';
         <div class="export-title">Courses</div>
         <div class="export-count"><?php echo $counts['courses']; ?></div>
         <div class="export-label">Total Records</div>
-        <a href="?export=courses" class="btn-export">📥 Export Courses CSV</a>
+        <form method="POST">
+            <?php csrf_token_input(); ?>
+            <input type="hidden" name="export" value="courses">
+            <button type="submit" class="btn-export">📥 Export Courses CSV</button>
+        </form>
     </div>
 
     <!-- Classes Export -->
@@ -372,7 +401,11 @@ require_once '../../includes/header.php';
         <div class="export-title">Classes</div>
         <div class="export-count"><?php echo $counts['classes']; ?></div>
         <div class="export-label">Total Records</div>
-        <a href="?export=classes" class="btn-export">📥 Export Classes CSV</a>
+        <form method="POST">
+            <?php csrf_token_input(); ?>
+            <input type="hidden" name="export" value="classes">
+            <button type="submit" class="btn-export">📥 Export Classes CSV</button>
+        </form>
     </div>
 </div>
 

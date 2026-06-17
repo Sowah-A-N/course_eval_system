@@ -22,7 +22,7 @@ start_secure_session();
 // Check if maintenance mode is enabled
 if (MAINTENANCE_MODE) {
     // Only allow admins during maintenance
-    if (!isset($_SESSION['role_id']) || $_SESSION['role_id'] != ROLE_ADMIN) {
+    if (!isset($_SESSION['role_id']) || $_SESSION['role_id'] !== ROLE_ADMIN) {
 ?>
         <!DOCTYPE html>
         <html lang="en">

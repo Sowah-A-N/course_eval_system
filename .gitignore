@@ -1,8 +1,30 @@
-database.php
+# ── Credentials ──────────────────────────────────────────────────────────────
+# database.php contains DB credentials (even as env-var fallbacks).
+# Never commit it; each environment maintains its own copy.
+config/database.php
 **/database.php
-/storage/logs
-/vendor
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+# Log files contain stack traces, usernames, SQL fragments, and file paths.
+/logs/
+/storage/logs/
+*.log
+
+# ── Environment files ────────────────────────────────────────────────────────
 .env
-course_evaluation.sql
+.env.*
+!.env.example
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+/vendor/
+
+# ── Database dumps ───────────────────────────────────────────────────────────
+*.sql
+*.sql.gz
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
 .claude/
-twice.php
+.idea/
+.vscode/
+*.DS_Store
+Thumbs.db

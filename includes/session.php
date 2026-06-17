@@ -101,9 +101,23 @@ function check_login($redirect = true) {
     // Check if user_id exists in session
     if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
         if ($redirect) {
-            // Store current page for redirect after login (only safe relative paths)
+            // Store current page for redirect after login.
+            // Validation rules — the URI must:
+            //   1. Start with '/'        (relative, not protocol-relative or absolute)
+            //   2. Not start with '//'   (prevents //evil.com off-origin redirect)
+            //   3. Not contain '\'       (browsers normalise /\evil.com → //evil.com)
+            //   4. Not contain '..'      (prevents path traversal)
+            //   5. Not contain ':'       (prevents javascript: or data: URIs)
+            // Any URI that fails these checks is silently discarded; the user
+            // will land on their role dashboard instead.
             $uri = $_SERVER['REQUEST_URI'] ?? '';
-            if (strpos($uri, '/') === 0 && strpos($uri, '//') !== 0 && strpos($uri, '..') === false) {
+            if (
+                strpos($uri, '/')    === 0          &&
+                strpos($uri, '//')   !== 0           &&
+                strpos($uri, '\\')   === false        &&
+                strpos($uri, '..')   === false        &&
+                strpos($uri, ':')    === false
+            ) {
                 $_SESSION['redirect_after_login'] = $uri;
             }
 
@@ -163,17 +177,31 @@ function check_login($redirect = true) {
  * @return bool True if session is valid, false if expired
  */
 function check_session_timeout($redirect = true) {
-    // Check if last_activity is set
-    if (!isset($_SESSION['last_activity'])) {
-        return true; // First time, allow it
+    // ── Absolute lifetime check ──────────────────────────────────────────────
+    // Enforce an upper bound on how long ANY session may live, regardless of
+    // how active the user is.  Without this a user (or attacker with a stolen
+    // cookie) could maintain a session indefinitely by staying active.
+    // SESSION_ABSOLUTE_LIFETIME is defined in config/constants.php (default 8 h).
+    if (isset($_SESSION['session_start'])) {
+        $absolute_age = time() - $_SESSION['session_start'];
+        if ($absolute_age > SESSION_ABSOLUTE_LIFETIME) {
+            logout_user();
+            if ($redirect) {
+                header("Location: " . get_base_url() . "/login.php?error=session_expired");
+                exit();
+            }
+            return false;
+        }
     }
 
-    // Calculate time since last activity
+    // ── Inactivity timeout check ─────────────────────────────────────────────
+    if (!isset($_SESSION['last_activity'])) {
+        return true; // First request in this session — allow it
+    }
+
     $inactive_time = time() - $_SESSION['last_activity'];
 
-    // Check if session has timed out
     if ($inactive_time > SESSION_TIMEOUT) {
-        // Session expired
         logout_user();
 
         if ($redirect) {
@@ -404,16 +432,24 @@ function display_session_message() {
  * @return string Base URL
  */
 function get_base_url() {
-    if (defined('APP_URL')) {
-        return APP_URL;
+    if (defined('APP_URL') && APP_URL !== '') {
+        return rtrim(APP_URL, '/');
     }
 
-    // Fallback: construct from server variables
-    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'];
-    $script = dirname($_SERVER['SCRIPT_NAME']);
-
-    return rtrim($protocol . '://' . $host . $script, '/');
+    // APP_URL must be set in config/constants.php (or via the APP_URL env var).
+    // The old fallback constructed a URL from $_SERVER['HTTP_HOST'], which is
+    // an attacker-controlled request header on many Apache/Nginx configurations.
+    // That fallback enabled Host Header Injection — an attacker who sent
+    //   Host: evil.com
+    // would receive redirect URLs pointing to evil.com, enabling phishing and
+    // (once password-reset is added) reset-link poisoning.
+    //
+    // If APP_URL is genuinely absent we log the misconfiguration and stop.
+    // A missing APP_URL is a deployment error, not a runtime condition to
+    // paper over with untrusted header data.
+    error_log('[CES] CRITICAL: APP_URL is not defined. Set APP_URL in config/constants.php or the APP_URL environment variable.');
+    http_response_code(500);
+    die('Application misconfiguration: APP_URL is not set. Please contact the system administrator.');
 }
 
 /**

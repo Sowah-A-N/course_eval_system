@@ -6,8 +6,8 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
-$user_id=intval($_REQUEST['id']??0);
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+$user_id=intval($_GET["id"]??0);
 $page_title='Delete User';
 $query="SELECT * FROM user_details WHERE user_id=?";
 $stmt=mysqli_prepare($conn,$query);
@@ -54,16 +54,21 @@ mysqli_stmt_bind_param($stmt,"i",$user_id);
 if(!mysqli_stmt_execute($stmt))throw new \RuntimeException(mysqli_error($conn));
 mysqli_stmt_close($stmt);
 mysqli_commit($conn);
-log_audit($conn,$_SESSION['user_id'],'USER_DELETE','user_details',$user_id,['username'=>$user['username'],'email'=>$user['email'],'role_id'=>$user['role_id']],null);
+// Audit log written BEFORE the redirect so that if exit() is ever
+// accidentally removed, the log entry is already persisted and the
+// page cannot render admin content after the Location header.
+log_audit($conn,$_SESSION['user_id'],AUDIT_USER_DELETE,'user_details',$user_id,['username'=>$user['username'],'email'=>$user['email'],'role_id'=>$user['role_id']],null);
 $_SESSION['flash_message']='User deleted successfully!';
 $_SESSION['flash_type']='success';
+header("Location:list.php");
+exit();
 }catch(\Exception $e){
 mysqli_rollback($conn);
 $_SESSION['flash_message']='Error deleting user.';
 $_SESSION['flash_type']='error';
-}
 header("Location:list.php");
 exit();
+}
 }
 require_once '../../includes/header.php';
 ?>

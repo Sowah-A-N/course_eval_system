@@ -6,7 +6,7 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Generate Evaluation Tokens';
 $errors=[];
 $success=false;
@@ -23,26 +23,58 @@ while($row=mysqli_fetch_assoc($result_depts))$departments[]=$row;
 $levels=[];
 $result_levels=mysqli_query($conn,"SELECT * FROM level ORDER BY level_number");
 while($row=mysqli_fetch_assoc($result_levels))$levels[]=$row;
+// $dry_run_count > 0 means we've completed a dry-run and are waiting for confirmation.
+$dry_run_count = 0;
+$dry_run_dept  = 0;
+$dry_run_level = 0;
+
 if($_SERVER['REQUEST_METHOD']=='POST'&&empty($errors)){
 if(!validate_csrf_token())$errors[]='Invalid security token.';
 $department_id=intval($_POST['department_id']??0);
 $level_id=intval($_POST['level_id']??0);
 $regenerate=isset($_POST['regenerate'])?1:0;
+$confirmed=isset($_POST['confirmed'])&&$_POST['confirmed']==='1';
 if($department_id==0)$errors[]='Please select a department.';
 if($level_id==0)$errors[]='Please select a level.';
 if(empty($errors)){
+// ── Dry-run: count what would be generated ───────────────────────────────
+// This query counts student × course pairs that don't already have a token
+// for the active period (respecting the skip-existing logic in the real run).
+$role=ROLE_STUDENT;
+$stmt_dr=mysqli_prepare($conn,
+"SELECT COUNT(*) AS projected
+ FROM user_details u
+ JOIN courses c ON c.department_id=u.department_id AND c.level_id=u.level_id
+ WHERE u.department_id=? AND u.level_id=? AND u.role_id=? AND u.is_active=1
+   AND NOT EXISTS (
+       SELECT 1 FROM evaluation_tokens et
+       WHERE et.student_user_id=u.user_id
+         AND et.course_id=c.id
+         AND et.academic_year_id=?
+         AND et.semester_id=?
+   )");
+mysqli_stmt_bind_param($stmt_dr,"iiiii",
+    $department_id,$level_id,$role,
+    $active_period['academic_year_id'],$active_period['semester_id']);
+mysqli_stmt_execute($stmt_dr);
+$dr_row=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_dr));
+mysqli_stmt_close($stmt_dr);
+$projected=(int)($dr_row['projected']??0);
+
+// ── Hard cap check ───────────────────────────────────────────────────────
+if($projected>MAX_BULK_TOKEN_GENERATION){
+$errors[]='This operation would generate '.$projected.' tokens, which exceeds the single-operation limit of '.MAX_BULK_TOKEN_GENERATION.'. Narrow the selection (choose a smaller level or run department by department) or raise MAX_BULK_TOKEN_GENERATION in config/constants.php.';
+}elseif(!$confirmed){
+// ── First pass: show the count and ask for confirmation ──────────────────
+$dry_run_count=$projected;
+$dry_run_dept=$department_id;
+$dry_run_level=$level_id;
+}else{
+// ── Confirmed: generate the tokens ──────────────────────────────────────
 mysqli_begin_transaction($conn);
 try{
-$query_students="
-SELECT DISTINCT u.user_id 
-FROM user_details u
-WHERE u.department_id=? 
-AND u.level_id=? 
-AND u.role_id=? 
-AND u.is_active=1
-";
+$query_students="SELECT DISTINCT u.user_id FROM user_details u WHERE u.department_id=? AND u.level_id=? AND u.role_id=? AND u.is_active=1";
 $stmt_students=mysqli_prepare($conn,$query_students);
-$role=ROLE_STUDENT;
 mysqli_stmt_bind_param($stmt_students,"iii",$department_id,$level_id,$role);
 mysqli_stmt_execute($stmt_students);
 $result_students=mysqli_stmt_get_result($stmt_students);
@@ -52,11 +84,7 @@ mysqli_stmt_close($stmt_students);
 if(empty($students)){
 $errors[]='No active students found for selected department and level.';
 }else{
-$query_courses="
-SELECT id FROM courses 
-WHERE department_id=? 
-AND level_id=?
-";
+$query_courses="SELECT id FROM courses WHERE department_id=? AND level_id=?";
 $stmt_courses=mysqli_prepare($conn,$query_courses);
 mysqli_stmt_bind_param($stmt_courses,"ii",$department_id,$level_id);
 mysqli_stmt_execute($stmt_courses);
@@ -74,32 +102,29 @@ $query_check="SELECT token_id FROM evaluation_tokens WHERE student_user_id=? AND
 $stmt_check=mysqli_prepare($conn,$query_check);
 mysqli_stmt_bind_param($stmt_check,"iiii",$student_id,$course_id,$active_period['academic_year_id'],$active_period['semester_id']);
 mysqli_stmt_execute($stmt_check);
-if(mysqli_stmt_get_result($stmt_check)->num_rows>0){
-mysqli_stmt_close($stmt_check);
-continue;
-}
+if(mysqli_stmt_get_result($stmt_check)->num_rows>0){mysqli_stmt_close($stmt_check);continue;}
 mysqli_stmt_close($stmt_check);
 }
 $token=bin2hex(random_bytes(TOKEN_LENGTH));
 $query_insert="INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,is_used) VALUES (?,?,?,?,?,0)";
 $stmt_insert=mysqli_prepare($conn,$query_insert);
 mysqli_stmt_bind_param($stmt_insert,"siiii",$token,$student_id,$course_id,$active_period['academic_year_id'],$active_period['semester_id']);
-if(mysqli_stmt_execute($stmt_insert)){
-$generated_count++;
-}
+if(mysqli_stmt_execute($stmt_insert)){$generated_count++;}
 mysqli_stmt_close($stmt_insert);
 }
 }
 mysqli_commit($conn);
 $success=true;
-log_audit($conn,$_SESSION['user_id'],'TOKEN_GENERATE','evaluation_tokens',null,null,['count'=>$generated_count,'department_id'=>$department_id,'level_id'=>$level_id,'academic_year_id'=>$active_period['academic_year_id'],'semester_id'=>$active_period['semester_id']]);
+log_audit($conn,$_SESSION['user_id'],AUDIT_TOKEN_GENERATE,'evaluation_tokens',null,null,['count'=>$generated_count,'department_id'=>$department_id,'level_id'=>$level_id,'academic_year_id'=>$active_period['academic_year_id'],'semester_id'=>$active_period['semester_id']]);
 $_SESSION['flash_message']="Successfully generated $generated_count evaluation tokens!";
 $_SESSION['flash_type']='success';
 }
 }
 }catch(Exception $e){
 mysqli_rollback($conn);
-$errors[]='Error generating tokens: '.$e->getMessage();
+error_log('[CES] Token generation failed: '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine());
+$errors[]='Token generation failed due to a system error. Please check the server error log or contact the system administrator.';
+}
 }
 }
 }
@@ -195,8 +220,21 @@ You must configure an active academic year and semester before generating tokens
 <span>Skip if tokens already exist (don't create duplicates)</span>
 </label>
 </div>
-<button type="submit" class="btn btn-primary">Generate Tokens</button>
+<?php if($dry_run_count>0): ?>
+<input type="hidden" name="confirmed" value="1">
+<input type="hidden" name="department_id" value="<?php echo $dry_run_dept; ?>">
+<input type="hidden" name="level_id" value="<?php echo $dry_run_level; ?>">
+<div style="background:#fff3cd;border:1px solid #ffc107;padding:15px;border-radius:8px;margin-bottom:15px">
+<strong>⚠️ Confirmation required</strong><br>
+This operation will generate <strong><?php echo $dry_run_count; ?></strong> evaluation token<?php echo $dry_run_count!==1?'s':''; ?>.
+This cannot be undone. Are you sure you want to continue?
+</div>
+<button type="submit" class="btn btn-primary">Yes, Generate <?php echo $dry_run_count; ?> Token<?php echo $dry_run_count!==1?'s':''; ?></button>
+<a href="generate.php" class="btn btn-secondary">Cancel</a>
+<?php else: ?>
+<button type="submit" class="btn btn-primary">Preview &amp; Generate Tokens</button>
 <a href="../index.php" class="btn btn-secondary">Cancel</a>
+<?php endif; ?>
 </form>
 </div>
 <div class="info-box" style="margin-top:20px">

@@ -88,18 +88,14 @@ function validate_csrf_token($token = null, $input_name = null)
         $input_name = CSRF_TOKEN_NAME;
     }
 
-    // If token not provided, try to get it from POST or GET
+    // If token not provided, read it exclusively from POST.
+    // GET is intentionally not supported: CSRF tokens in query strings
+    // are logged by web servers, appear in browser history, and leak via
+    // the Referer header — all of which defeat the purpose of the token.
     if ($token === null) {
-        // Check POST first (most common)
         if (isset($_POST[$input_name])) {
             $token = $_POST[$input_name];
-        }
-        // Then check GET (less common, but supported)
-        elseif (isset($_GET[$input_name])) {
-            $token = $_GET[$input_name];
-        }
-        // No token found
-        else {
+        } else {
             return false;
         }
     }
@@ -209,24 +205,38 @@ function csrf_token_meta($echo = true)
 
 /**
  * CSRF Token for JavaScript/AJAX
- * 
- * Outputs JavaScript code to set CSRF token as a variable.
- * Use this if you need the token in JavaScript.
- * 
- * @param string $var_name JavaScript variable name (default: 'csrf_token')
+ *
+ * Emits a <meta> tag carrying the CSRF token so that JavaScript can read
+ * it via the DOM without ever exposing it as a global variable.
+ *
+ * WHY NOT A GLOBAL VARIABLE:
+ *   A JS global (var csrf_token = "…") is readable by any script on the
+ *   page — including injected third-party scripts or XSS payloads.
+ *   A <meta> tag in <head> is equally accessible to legitimate code but
+ *   carries no additional risk beyond what a hidden form field already
+ *   exposes.  It also pairs naturally with a Content-Security-Policy that
+ *   limits which script sources are trusted.
+ *
+ * USAGE in JavaScript:
+ *   const token = document
+ *       .querySelector('meta[name="csrf_token"]')
+ *       ?.getAttribute('content') ?? '';
+ *
+ *   fetch('/endpoint.php', {
+ *       method: 'POST',
+ *       headers: { 'X-CSRF-Token': token },
+ *       body: JSON.stringify(payload)
+ *   });
+ *
  * @param bool $echo Whether to echo or return (default: true)
- * @return string|void JavaScript code
+ * @return string|void HTML <meta> tag
  */
-function csrf_token_js($var_name = 'csrf_token', $echo = true)
+function csrf_token_js($echo = true)
 {
-    $token = generate_csrf_token();
-    $js = '<script>var ' . $var_name . ' = "' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '";</script>';
-
-    if ($echo) {
-        echo $js;
-    } else {
-        return $js;
-    }
+    // Delegate to csrf_token_meta() which already produces the correct output.
+    // The $var_name parameter is intentionally removed — global JS variables
+    // are not a safe delivery mechanism for CSRF tokens.
+    return csrf_token_meta($echo);
 }
 
 /**

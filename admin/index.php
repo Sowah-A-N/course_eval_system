@@ -23,7 +23,7 @@ require_once '../includes/session.php';
 start_secure_session();
 check_login();
 
-if ($_SESSION['role_id'] != ROLE_ADMIN) {
+if ($_SESSION['role_id'] !== ROLE_ADMIN) {
     $_SESSION['flash_message'] = 'Access denied. This page is only for system administrators.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../login.php");

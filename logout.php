@@ -17,34 +17,30 @@
 require_once 'config/database.php';
 require_once 'config/constants.php';
 require_once 'includes/session.php';
+require_once 'includes/csrf.php';
+require_once 'includes/audit.php';
 
 // Start secure session
 start_secure_session();
 
-// Store user_id before destroying session (for audit log)
-$user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
-
-// Optional: Log logout action to audit_logs table
-if ($user_id !== null) {
-    // Prepare audit log query
-    $query = "INSERT INTO " . TABLE_AUDIT_LOGS . "
-              (user_id, action_type, ip_address, user_agent, created_at)
-              VALUES (?, ?, ?, ?, NOW())";
-
-    $stmt = mysqli_prepare($conn, $query);
-
-    if ($stmt) {
-        $action_type = AUDIT_LOGOUT;
-        $ip_address = $_SERVER['REMOTE_ADDR'];
-        $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'Unknown';
-
-        mysqli_stmt_bind_param($stmt, "isss", $user_id, $action_type, $ip_address, $user_agent);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-    }
+// Require POST + valid CSRF token so that a third-party page cannot log out
+// the user by embedding <img src="logout.php"> or similar.
+// GET-based logouts are silently redirected to login without destroying the session.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !validate_csrf_token()) {
+    header("Location: login.php");
+    exit();
 }
 
-// Use the logout_user function from session.php
+// Capture user_id BEFORE the session is destroyed so the audit row has a subject.
+$user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+
+// Audit the logout using the shared helper (consistent schema, all fields populated).
+// Must happen before logout_user() destroys the session.
+if ($user_id !== null) {
+    log_audit($conn, $user_id, AUDIT_LOGOUT, null, null, null, null);
+}
+
+// Destroy the session and clear the cookie.
 logout_user();
 
 // Close database connection (optional)

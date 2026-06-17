@@ -31,7 +31,7 @@ start_secure_session();
 check_login();
 
 // Check if user is a student
-if ($_SESSION['role_id'] != ROLE_STUDENT) {
+if ($_SESSION['role_id'] !== ROLE_STUDENT) {
     $_SESSION['flash_message'] = 'Access denied. This page is only for students.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
@@ -530,10 +530,21 @@ require_once '../../includes/header.php';
                                 ✓ Evaluation Complete
                             </span>
                         <?php else: ?>
-                            <a href="submit.php?token=<?php echo urlencode($eval['token']); ?>"
-                                class="btn btn-primary">
-                                Evaluate Now →
-                            </a>
+                            <?php
+                            // POST the token rather than passing it in the URL.
+                            // GET parameters appear in web-server access logs, CDN
+                            // logs, and browser history — a stolen token would let
+                            // an attacker submit an evaluation on behalf of the student.
+                            // Submitting via POST keeps the token out of all logs.
+                            ?>
+                            <form method="POST" action="submit.php" style="display:inline;margin:0">
+                                <?php csrf_token_input(); ?>
+                                <input type="hidden" name="token"
+                                       value="<?php echo htmlspecialchars($eval['token'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <button type="submit" class="btn btn-primary">
+                                    Evaluate Now →
+                                </button>
+                            </form>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -547,7 +558,7 @@ require_once '../../includes/header.php';
             <p style="margin: 0; color: #666; font-size: 14px;">
                 You have completed <strong><?php echo $completed_count; ?></strong> out of
                 <strong><?php echo $total_count; ?></strong> evaluations
-                (<?php echo round(($completed_count / $total_count) * 100, 1); ?>% complete)
+                (<?php echo $total_count > 0 ? round(($completed_count / $total_count) * 100, 1) : 0; ?>% complete)
             </p>
         <?php else: ?>
             <p style="margin: 0; color: #28a745; font-size: 16px; font-weight: 600;">

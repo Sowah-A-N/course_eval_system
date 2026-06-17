@@ -6,7 +6,7 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 start_secure_session();
 check_login();
-if($_SESSION['role_id']!=ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
+if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $user_id=intval($_GET['id']??0);
 $page_title='Edit User';
 $errors=[];
@@ -37,11 +37,20 @@ $level_id=intval($_POST['level_id']??0);
 $class_id=intval($_POST['class_id']??0);
 $unique_id=trim($_POST['unique_id']??'');
 $is_active=isset($_POST['is_active'])?1:0;
+// Password change is optional — only applied when the admin fills in the field.
+$new_password=trim($_POST['new_password']??'');
 if(empty($f_name))$errors[]='First name required.';
 if(empty($l_name))$errors[]='Last name required.';
 if(empty($email))$errors[]='Email required.';
 elseif(!filter_var($email,FILTER_VALIDATE_EMAIL))$errors[]='Invalid email format.';
 if($role_id==0)$errors[]='Select role.';
+// Enforce the same password policy as create.php when a new password is provided.
+if(!empty($new_password)){
+if(strlen($new_password)<PASSWORD_MIN_LENGTH)$errors[]='New password must be at least '.PASSWORD_MIN_LENGTH.' characters.';
+elseif(!preg_match('/[A-Z]/',$new_password))$errors[]='New password must contain at least one uppercase letter.';
+elseif(!preg_match('/[a-z]/',$new_password))$errors[]='New password must contain at least one lowercase letter.';
+elseif(!preg_match('/[0-9]/',$new_password))$errors[]='New password must contain at least one number.';
+}
 if(empty($errors)){
 $query_check="SELECT user_id FROM user_details WHERE email=? AND user_id!=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
@@ -59,7 +68,15 @@ $query="UPDATE user_details SET f_name=?,l_name=?,email=?,unique_id=?,role_id=?,
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"ssssiiiiii",$f_name,$l_name,$email,$unique_id_value,$role_id,$dept_id_value,$level_id_value,$class_id_value,$is_active,$user_id);
 if(mysqli_stmt_execute($stmt)){
-log_audit($conn,$_SESSION['user_id'],'USER_UPDATE','user_details',$user_id,['f_name'=>$user['f_name'],'l_name'=>$user['l_name'],'email'=>$user['email'],'role_id'=>$user['role_id']],['f_name'=>$f_name,'l_name'=>$l_name,'email'=>$email,'role_id'=>$role_id]);
+// Update password separately only when the admin provided a new one.
+if(!empty($new_password)){
+$hash=password_hash($new_password,PASSWORD_DEFAULT);
+$stmt_pw=mysqli_prepare($conn,"UPDATE user_details SET password=? WHERE user_id=?");
+mysqli_stmt_bind_param($stmt_pw,"si",$hash,$user_id);
+mysqli_stmt_execute($stmt_pw);
+mysqli_stmt_close($stmt_pw);
+}
+log_audit($conn,$_SESSION['user_id'],AUDIT_USER_UPDATE,'user_details',$user_id,['f_name'=>$user['f_name'],'l_name'=>$user['l_name'],'email'=>$user['email'],'role_id'=>$user['role_id']],['f_name'=>$f_name,'l_name'=>$l_name,'email'=>$email,'role_id'=>$role_id,'password_changed'=>!empty($new_password)]);
 $_SESSION['flash_message']='User updated!';
 $_SESSION['flash_type']='success';
 header("Location:list.php");
@@ -153,6 +170,14 @@ require_once '../../includes/header.php';
 </div>
 <div class="form-group">
 <label for="is_active"><input type="checkbox" id="is_active" name="is_active" <?php echo $user['is_active']?'checked':'';?>> Active</label>
+</div>
+<div class="form-group" style="border-top:1px solid #e0e0e0;padding-top:20px;margin-top:20px">
+<label class="form-label">New Password <small style="color:#666;font-weight:normal">(leave blank to keep current password)</small></label>
+<input type="password" name="new_password" class="form-input" autocomplete="new-password"
+       placeholder="Enter new password or leave blank">
+<small style="color:#666;display:block;margin-top:4px">
+Minimum <?php echo PASSWORD_MIN_LENGTH; ?> characters, must include uppercase, lowercase, and a number.
+</small>
 </div>
 <button type="submit" class="btn btn-primary">Update User</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

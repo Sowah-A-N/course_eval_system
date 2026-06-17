@@ -28,8 +28,21 @@ define('ROLE_SECRETARY', 3);    // Department Secretary - read-only access
 define('ROLE_ADVISOR', 4);      // Class Advisor - class-level access
 define('ROLE_STUDENT', 5);      // Student - evaluation submission
 define('ROLE_QUALITY', 6);      // Quality Assurance - institution-wide reporting
-// Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class
-define('ROLE_LECTURER', ROLE_ADVISOR); // Alias so existing code referencing ROLE_LECTURER still works
+// Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class.
+// This alias exists so that existing code using ROLE_LECTURER continues to work without
+// needing a separate role integer in the database.
+//
+// IMPORTANT: if the roles are ever split (e.g. lecturers become role_id 7 in the DB),
+// remove this alias AND update every role check in the codebase.  The assertion below
+// will throw immediately if someone adds "define('ROLE_LECTURER', 7)" anywhere — making
+// the mismatch visible at load time rather than silently at authorisation time.
+define('ROLE_LECTURER', ROLE_ADVISOR);
+// Boot-time guard — fires before any request is processed.
+assert(
+    ROLE_LECTURER === ROLE_ADVISOR,
+    'ROLE_LECTURER and ROLE_ADVISOR must share the same integer value. ' .
+    'If you are splitting them, update all role checks first.'
+);
 
 /**
  * Role Names (for display purposes)
@@ -53,6 +66,20 @@ define('ROLE_NAMES', [
  * This prevents deanonymization of students
  */
 define('MIN_RESPONSE_COUNT', 5);
+
+/**
+ * Maximum tokens that may be generated in a single bulk operation.
+ * Prevents a single mis-click from flooding the evaluation_tokens table
+ * (e.g. wrong department selected for a large cohort).
+ * Adjust upward if RMU's largest department × course combination exceeds this.
+ */
+define('MAX_BULK_TOKEN_GENERATION', 2000);
+
+/**
+ * Password Reset Token TTL (seconds)
+ * How long a reset link remains valid after it is issued.
+ */
+define('PASSWORD_RESET_TTL', 900); // 15 minutes
 
 /**
  * Evaluation Scale
@@ -86,7 +113,20 @@ define('TOKEN_LENGTH', 32);  // Results in 64-character hex string
  * Session Timeout (in seconds)
  * User will be logged out after this period of inactivity
  */
-define('SESSION_TIMEOUT', 1800);  // 30 minutes (1800 seconds)
+define('SESSION_TIMEOUT', 1800);           // 30 minutes — inactivity timeout (seconds)
+
+/**
+ * Absolute Session Lifetime
+ *
+ * Maximum wall-clock time a session may live, regardless of activity.
+ * Without this, a user who keeps clicking every 29 minutes could hold a
+ * session indefinitely — their stolen cookie would also be valid forever.
+ * After SESSION_ABSOLUTE_LIFETIME the user is always required to re-login.
+ *
+ * Set to 8 hours (28 800 s) — a full working day.  Adjust to fit RMU's
+ * security policy.  Must always be > SESSION_TIMEOUT.
+ */
+define('SESSION_ABSOLUTE_LIFETIME', 28800);  // 8 hours (28 800 seconds)
 
 /**
  * Session Cookie Settings
@@ -94,8 +134,7 @@ define('SESSION_TIMEOUT', 1800);  // 30 minutes (1800 seconds)
 define('SESSION_COOKIE_LIFETIME', 0);        // 0 = Until browser closes
 define('SESSION_COOKIE_PATH', '/');
 define('SESSION_COOKIE_DOMAIN', '');         // Empty = Current domain
-// define('SESSION_COOKIE_SECURE', !IS_DEVELOPMENT);  // true in production (HTTPS), false in dev
-define('SESSION_COOKIE_SECURE', 'false');  // true in production (HTTPS), false in dev
+define('SESSION_COOKIE_SECURE', !IS_DEVELOPMENT);  // true in production (HTTPS), false in dev
 define('SESSION_COOKIE_HTTPONLY', true);     // Prevent JavaScript access
 define('SESSION_COOKIE_SAMESITE', 'Lax');    // CSRF protection
 
@@ -270,10 +309,20 @@ define('INSTITUTION_WEBSITE', 'https://www.rmu.edu.gh');
 define('APP_VERSION', '2.0.0');
 
 /**
- * Application URL
- * Set this to your application's base URL (without trailing slash)
+ * Application URL  (no trailing slash)
+ *
+ * Resolution order (first non-empty value wins):
+ *   1. APP_URL environment variable  — set this on the production server:
+ *        Apache  (.htaccess / httpd.conf):  SetEnv APP_URL https://app.rmu.edu.gh
+ *        Nginx   (fastcgi_params):          fastcgi_param APP_URL https://app.rmu.edu.gh;
+ *   2. Hard-coded fallback below          — only used on WAMP dev when the
+ *                                           env var is absent.
+ *
+ * WHY NOT build from HTTP_HOST: the HTTP Host request header is attacker-
+ * controlled on many server configs; using it to construct redirect targets
+ * enables host-header injection and open-redirect attacks.
  */
-define('APP_URL', 'http://localhost/course_evaluation');
+define('APP_URL', rtrim((string)(getenv('APP_URL') ?: 'http://localhost/course_evaluation'), '/'));
 
 /**
  * Maintenance Mode
@@ -401,6 +450,9 @@ define('AUDIT_PASSWORD_CHANGE', 'PASSWORD_CHANGE');
 define('AUDIT_EVALUATION_SUBMIT', 'EVALUATION_SUBMIT');
 define('AUDIT_LECTURER_ASSIGN', 'LECTURER_ASSIGN');
 define('AUDIT_TOKEN_GENERATE', 'TOKEN_GENERATE');
+define('AUDIT_USER_CREATE',    'USER_CREATE');
+define('AUDIT_USER_UPDATE',    'USER_UPDATE');
+define('AUDIT_USER_DELETE',    'USER_DELETE');
 
 // ============================================
 // REPORT TYPES
@@ -470,11 +522,33 @@ define('SEMESTER_NAMES', [
 // ============================================
 
 /**
- * Detect if running in development or production
- * You can set this manually or detect based on server
+ * Environment detection
+ *
+ * Reads the APP_ENV environment variable set by the web server or shell.
+ * Accepted values (case-insensitive): 'production', 'prod', 'development', 'dev', 'local'.
+ * Anything other than a recognised production value is treated as development
+ * so that a misconfigured server fails safe (verbose errors) rather than
+ * silently running in a locked-down state that hides problems.
+ *
+ * HOW TO SET IT
+ * ─────────────
+ * Apache  (httpd.conf / .htaccess):   SetEnv APP_ENV production
+ * Nginx   (fastcgi_params):           fastcgi_param APP_ENV production;
+ * CLI / cron:                         APP_ENV=production php script.php
+ * WAMP local dev:                     leave unset — defaults to 'development'
+ *
+ * WHY NOT $_SERVER['SERVER_NAME'] or $_SERVER['SERVER_ADDR']:
+ *   Both of those values can be influenced by the HTTP Host request header
+ *   on common Apache/Nginx configurations (UseCanonicalName Off is default).
+ *   An attacker who sends "Host: localhost" to a production server could
+ *   force IS_DEVELOPMENT = true, enabling verbose error output and relaxed
+ *   security settings.  An environment variable is set by the server operator
+ *   at deploy time and cannot be overridden by request headers.
  */
-define('IS_DEVELOPMENT', ($_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_ADDR'] === '127.0.0.1'));
-define('IS_PRODUCTION', !IS_DEVELOPMENT);
+$_app_env = strtolower(trim((string)(getenv('APP_ENV') ?: 'development')));
+define('IS_DEVELOPMENT', !in_array($_app_env, ['production', 'prod'], true));
+define('IS_PRODUCTION',  !IS_DEVELOPMENT);
+unset($_app_env);
 
 // ============================================
 // DEBUG MODE

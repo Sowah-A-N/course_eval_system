@@ -18,7 +18,7 @@ start_secure_session();
 check_login();
 
 // Check if user is an advisor
-if ($_SESSION['role_id'] != ROLE_ADVISOR) {
+if ($_SESSION['role_id'] !== ROLE_ADVISOR) {
     $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
