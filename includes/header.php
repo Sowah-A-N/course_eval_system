@@ -103,6 +103,36 @@ $_dashboard_folder = $_role_folders[$user_role] ?? '';
 // Determine base URL for links based on current path.
 // str_repeat produces e.g. '../../' — rtrim removes the trailing slash so that
 // concatenating with '/path' gives '../../path' (single slash, not double).
+// D9: historical period picker — load available periods once per request
+$_header_periods = [];
+if(isset($_SESSION['user_id'])){
+    $_res_hp=mysqli_query($conn??null,
+        "SELECT s.semester_id,ay.academic_year_id,ay.academic_year,s.semester_name,
+                IF(s.is_active=1 AND ay.is_active=1,1,0) AS is_current
+         FROM semesters s JOIN academic_years ay ON s.academic_year_id=ay.academic_year_id
+         ORDER BY ay.academic_year DESC, s.semester_value DESC LIMIT 20");
+    if($_res_hp) while($r=mysqli_fetch_assoc($_res_hp))$_header_periods[]=$r;
+    // Auto-set to current active period on first visit if nothing is stored
+    if(empty($_SESSION['view_year_id'])){
+        foreach($_header_periods as $_hp){
+            if($_hp['is_current']){
+                $_SESSION['view_year_id']=$_hp['academic_year_id'];
+                $_SESSION['view_semester_id']=$_hp['semester_id'];
+                break;
+            }
+        }
+    }
+}
+$_view_year = (int)($_SESSION['view_year_id']??0);
+$_view_sem  = (int)($_SESSION['view_semester_id']??0);
+$_view_label = '';
+foreach($_header_periods as $_hp){
+    if($_hp['academic_year_id']==$_view_year && $_hp['semester_id']==$_view_sem){
+        $_view_label = $_hp['academic_year'].' – '.$_hp['semester_name'];
+        break;
+    }
+}
+
 $base_url = '';
 $current_path = $_SERVER['PHP_SELF'] ?? '';
 
@@ -420,6 +450,31 @@ foreach ($_modules as $_mod => $_len) {
                 <div class="institution-name"><?php echo INSTITUTION_SHORT_NAME; ?></div>
             </div>
         </div>
+        <!-- D9: historical period picker -->
+        <?php if(!empty($_header_periods)): ?>
+        <form method="POST" action="<?php echo $base_url;?>/includes/set_period.php"
+              id="period-picker-form" style="margin:0 8px;display:flex;align-items:center;gap:6px">
+            <?php csrf_token_input();?>
+            <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'],ENT_QUOTES,'UTF-8');?>">
+            <select name="period_key" onchange="document.getElementById('period-picker-form').submit()"
+                    title="Switch viewing period"
+                    style="padding:5px 10px;border-radius:16px;border:1px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.15);color:white;font-size:12px;cursor:pointer;max-width:200px">
+                <?php foreach($_header_periods as $_hp): ?>
+                <option value="<?php echo $_hp['academic_year_id'].'-'.$_hp['semester_id'];?>"
+                        <?php echo ($_hp['academic_year_id']==$_view_year&&$_hp['semester_id']==$_view_sem)?'selected':'';?>>
+                    <?php echo htmlspecialchars($_hp['academic_year'].' '.$_hp['semester_name'].($_hp['is_current']?' ★':''));?>
+                </option>
+                <?php endforeach;?>
+            </select>
+        </form>
+        <?php endif;?>
+        <!-- D8: global search -->
+        <div style="flex:1;max-width:340px;margin:0 10px;position:relative">
+            <input type="text" id="gs-input" autocomplete="off" placeholder="Search students, courses…"
+                   aria-label="Global search"
+                   style="width:100%;padding:7px 12px;border-radius:20px;border:none;font-size:13px;outline:none;box-sizing:border-box">
+            <div id="gs-results" style="display:none;position:absolute;top:calc(100%+4px);left:0;right:0;background:white;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);z-index:9999;max-height:340px;overflow-y:auto;font-size:13px"></div>
+        </div>
         <div class="top-bar-right">
             <div class="user-info">
                 <div class="user-name"><?php echo htmlspecialchars($user_name); ?></div>
@@ -568,6 +623,7 @@ foreach ($_modules as $_mod => $_len) {
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/advisor/reports/class_report.php">Class Report</a>
                         <a href="<?php echo $base_url; ?>/advisor/reports/completion_report.php">Completion Report</a>
+                        <a href="<?php echo $base_url; ?>/advisor/reports/my_courses.php">My Course Results</a>
                         <a href="<?php echo $base_url; ?>/advisor/reports/advisor_performance.php">My Performance</a>
                     </div>
                 </li>
@@ -652,6 +708,47 @@ foreach ($_modules as $_mod => $_len) {
             var open = ul.classList.toggle('nav-open');
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
+    }());
+
+    // D8: global search
+    (function(){
+        var inp = document.getElementById('gs-input');
+        var box = document.getElementById('gs-results');
+        if (!inp) return;
+        var timer, lastQ = '';
+        var base = '<?php echo rtrim($base_url,'/');?>';
+        inp.addEventListener('input', function(){
+            clearTimeout(timer);
+            var q = inp.value.trim();
+            if (q === lastQ) return;
+            lastQ = q;
+            if (q.length < 2) { box.style.display='none'; return; }
+            timer = setTimeout(function(){
+                fetch(base + '/includes/search.php?q=' + encodeURIComponent(q))
+                    .then(function(r){ return r.json(); })
+                    .then(function(data){
+                        box.innerHTML = '';
+                        if (!data.length) {
+                            box.innerHTML = '<div style="padding:12px 14px;color:#999">No results</div>';
+                        } else {
+                            data.forEach(function(item){
+                                var a = document.createElement('a');
+                                a.href = base + '/' + item.url;
+                                a.style.cssText = 'display:block;padding:10px 14px;color:#333;text-decoration:none;border-bottom:1px solid #f0f0f0';
+                                a.innerHTML = '<strong>' + item.label + '</strong>'
+                                    + (item.sub ? '<span style="color:#999;margin-left:6px;font-size:12px">' + item.sub + '</span>' : '')
+                                    + '<span style="float:right;font-size:11px;color:#aaa">' + item.type + '</span>';
+                                a.addEventListener('mouseenter', function(){ this.style.background='#f5f5ff'; });
+                                a.addEventListener('mouseleave', function(){ this.style.background=''; });
+                                box.appendChild(a);
+                            });
+                        }
+                        box.style.display = 'block';
+                    }).catch(function(){ box.style.display='none'; });
+            }, 280);
+        });
+        document.addEventListener('click', function(e){ if (!inp.contains(e.target)) box.style.display='none'; });
+        inp.addEventListener('keydown', function(e){ if(e.key==='Escape') box.style.display='none'; });
     }());
 
     // D3: data-confirm links — first click shows an inline chip; second click follows href

@@ -42,7 +42,7 @@ require_once '../../includes/header.php';
 <div class="page-header"><h1>Lecturer Performance Report</h1><p>Individual lecturer evaluation ratings</p></div>
 <div class="lecturer-table">
 <table>
-<thead><tr><th scope="col">Lecturer Name</th><th scope="col">Evaluations</th><th scope="col">Average Rating</th></tr></thead>
+<thead><tr><th scope="col">Lecturer Name</th><th scope="col">Evaluations</th><th scope="col">Average Rating</th><th scope="col">Detail</th></tr></thead>
 <tbody>
 <?php foreach($lecturers as $lec): ?>
 <tr>
@@ -54,6 +54,7 @@ $class=$lec['avg_rating']>=4.0?'rating-high':($lec['avg_rating']>=3.0?'rating-me
 <?php else: ?>
 <span style="color:#999;font-style:italic"><?php echo $lec['total_evals']>0?'Insufficient data':'No data';?></span>
 <?php endif;?></td>
+<td><a href="course_report.php?lecturer_id=<?php echo $lec['user_id'];?>" style="color:#667eea;text-decoration:none;font-size:13px">View →</a></td>
 </tr>
 <?php endforeach;?>
 </tbody>

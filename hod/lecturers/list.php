@@ -278,6 +278,15 @@ require_once '../../includes/header.php';
     <p>Manage lecturers and course assignments</p>
 </div>
 
+<!-- D5: quick assignment panel -->
+<div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:20px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+<div style="flex:1;min-width:200px">
+    <strong style="font-size:15px">Course Assignment</strong><br>
+    <span style="font-size:13px;color:#666">Assign or remove courses from multiple lecturers at once using the grid view.</span>
+</div>
+<a href="assign_matrix.php" class="btn btn-primary" style="white-space:nowrap">⚡ Open Assignment Grid</a>
+</div>
+
 <!-- Summary Statistics -->
 <div class="stats-summary">
     <div class="stat-card">
@@ -311,7 +320,7 @@ require_once '../../includes/header.php';
 <!-- Search -->
 <div class="search-section">
     <form method="GET" class="search-form">
-        <input type="text" name="search" class="search-input" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($search); ? maxlength="100">">
+        <input type="text" name="search" class="search-input" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($search); ?>" maxlength="100">
         <button type="submit" class="btn btn-primary">Search</button>
         <a href="list.php" class="btn btn-secondary">Reset</a>
         <button type="button" onclick="exportTableToCSV('lecturers-table', 'lecturers.csv')" class="btn btn-success">Export CSV</button>
@@ -370,7 +379,7 @@ require_once '../../includes/header.php';
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a href="assign_courses.php?lecturer_id=<?php echo $lecturer['user_id']; ?>" class="btn btn-primary btn-sm">
+                            <a href="assign_matrix.php" class="btn btn-primary btn-sm">
                                 Assign Courses
                             </a>
                         </td>
