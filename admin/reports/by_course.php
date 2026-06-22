@@ -15,7 +15,7 @@ $departments=[];
 $result_depts=mysqli_query($conn,"SELECT * FROM department ORDER BY dep_name");
 while($row=mysqli_fetch_assoc($result_depts))$departments[]=$row;
 $academic_years=[];
-$result_years=mysqli_query($conn,"SELECT academic_year_id,academic_year FROM academic_years ORDER BY academic_year DESC");
+$result_years=mysqli_query($conn,"SELECT academic_year_id,year_label AS academic_year FROM academic_year ORDER BY start_year DESC");
 while($row=mysqli_fetch_assoc($result_years))$academic_years[]=$row;
 $semesters=[];
 $result_sems=mysqli_query($conn,"SELECT semester_id,semester_name FROM semesters ORDER BY semester_value");

@@ -9,7 +9,7 @@ if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denie
 $page_title='Export Data';
 // C7: available periods for filter dropdowns (used on GET render)
 $export_years=[];
-$res_ey=mysqli_query($conn,"SELECT academic_year_id,academic_year FROM academic_years ORDER BY academic_year DESC");
+$res_ey=mysqli_query($conn,"SELECT academic_year_id,year_label AS academic_year FROM academic_year ORDER BY start_year DESC");
 while($r=mysqli_fetch_assoc($res_ey))$export_years[]=$r;
 $export_sems=[];
 $res_es=mysqli_query($conn,"SELECT semester_id,semester_name FROM semesters ORDER BY semester_value");

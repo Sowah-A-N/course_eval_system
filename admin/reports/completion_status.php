@@ -18,7 +18,7 @@ $levels=[];
 $result_levels=mysqli_query($conn,"SELECT * FROM level ORDER BY level_number");
 while($row=mysqli_fetch_assoc($result_levels))$levels[]=$row;
 $academic_years=[];
-$result_years=mysqli_query($conn,"SELECT academic_year_id,academic_year FROM academic_years ORDER BY academic_year DESC");
+$result_years=mysqli_query($conn,"SELECT academic_year_id,year_label AS academic_year FROM academic_year ORDER BY start_year DESC");
 while($row=mysqli_fetch_assoc($result_years))$academic_years[]=$row;
 $semesters=[];
 $result_sems=mysqli_query($conn,"SELECT semester_id,semester_name FROM semesters ORDER BY semester_value");

@@ -107,10 +107,10 @@ $_dashboard_folder = $_role_folders[$user_role] ?? '';
 $_header_periods = [];
 if(isset($_SESSION['user_id'])){
     $_res_hp=mysqli_query($conn??null,
-        "SELECT s.semester_id,ay.academic_year_id,ay.academic_year,s.semester_name,
+        "SELECT s.semester_id,ay.academic_year_id,ay.year_label AS academic_year,s.semester_name,
                 IF(s.is_active=1 AND ay.is_active=1,1,0) AS is_current
-         FROM semesters s JOIN academic_years ay ON s.academic_year_id=ay.academic_year_id
-         ORDER BY ay.academic_year DESC, s.semester_value DESC LIMIT 20");
+         FROM semesters s JOIN academic_year ay ON s.academic_year_id=ay.academic_year_id
+         ORDER BY ay.start_year DESC, s.semester_value DESC LIMIT 20");
     if($_res_hp) while($r=mysqli_fetch_assoc($_res_hp))$_header_periods[]=$r;
     // Auto-set to current active period on first visit if nothing is stored
     if(empty($_SESSION['view_year_id'])){

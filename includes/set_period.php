@@ -15,7 +15,7 @@ if(preg_match('/^(\d+)-(\d+)$/',$key,$m)){
     $sem_id  = (int)$m[2];
     // Verify this period exists
     $stmt=mysqli_prepare($conn,
-        "SELECT s.semester_id FROM semesters s JOIN academic_years ay ON s.academic_year_id=ay.academic_year_id
+        "SELECT s.semester_id FROM semesters s JOIN academic_year ay ON s.academic_year_id=ay.academic_year_id
          WHERE ay.academic_year_id=? AND s.semester_id=? LIMIT 1");
     mysqli_stmt_bind_param($stmt,"ii",$year_id,$sem_id);
     mysqli_stmt_execute($stmt);
