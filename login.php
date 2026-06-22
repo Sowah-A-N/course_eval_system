@@ -28,13 +28,14 @@ start_secure_session();
 
 // If user is already logged in, redirect to appropriate dashboard
 if (isset($_SESSION['user_id']) && isset($_SESSION['role_id'])) {
+    $base_url = get_base_url();
     switch ($_SESSION['role_id']) {
-        case ROLE_ADMIN:     header("Location: admin/index.php");     exit();
-        case ROLE_HOD:       header("Location: hod/index.php");       exit();
-        case ROLE_SECRETARY: header("Location: secretary/index.php"); exit();
-        case ROLE_ADVISOR:   header("Location: advisor/index.php");   exit();
-        case ROLE_STUDENT:   header("Location: student/index.php");   exit();
-        case ROLE_QUALITY:   header("Location: quality/index.php");   exit();
+        case ROLE_ADMIN:     header("Location: $base_url/admin/index.php");     exit();
+        case ROLE_HOD:       header("Location: $base_url/hod/index.php");       exit();
+        case ROLE_SECRETARY: header("Location: $base_url/secretary/index.php"); exit();
+        case ROLE_ADVISOR:   header("Location: $base_url/advisor/index.php");   exit();
+        case ROLE_STUDENT:   header("Location: $base_url/student/index.php");   exit();
+        case ROLE_QUALITY:   header("Location: $base_url/quality/index.php");   exit();
         default:             session_destroy(); break;
     }
 }
@@ -112,7 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Prepare query to find user by username or email
                 $query = "SELECT
                             user_id, username, email, password, role_id,
-                            department_id, class_id, level_id, f_name, l_name, is_active
+                            department_id, class_id, level_id, f_name, l_name,
+                            is_active, force_password_change
                           FROM " . TABLE_USER_DETAILS . "
                           WHERE (username = ? OR email = ?)
                           LIMIT 1";
@@ -139,6 +141,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 mysqli_stmt_execute($stmt_clear);
                                 mysqli_stmt_close($stmt_clear);
 
+                                // B8: purge login_attempts rows older than 1 day to keep the
+                                // table from growing unbounded without a scheduled cron job.
+                                $stmt_purge = mysqli_prepare($conn,
+                                    "DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+                                mysqli_stmt_execute($stmt_purge);
+                                mysqli_stmt_close($stmt_purge);
+
                                 // Regenerate session ID BEFORE writing any session data.
                                 // PHP copies existing session data to the new ID, so the
                                 // redirect_after_login value stored before login is preserved.
@@ -160,9 +169,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 $_SESSION['session_start'] = time();
                                 $_SESSION['login_time']    = time();
 
+                                // C9: flag accounts that require a password change on first login
+                                if (!empty($user['force_password_change'])) {
+                                    $_SESSION['must_change_password'] = 1;
+                                }
+
                                 // Log successful login
                                 log_audit($conn, $user['user_id'], AUDIT_LOGIN,
                                     TABLE_USER_DETAILS, $user['user_id'], null, null);
+
+                                // C9: forced password change takes priority over any saved redirect URL
+                                if (!empty($_SESSION['must_change_password'])) {
+                                    unset($_SESSION['redirect_after_login']);
+                                    $base_url = get_base_url();
+                                    if ($user['role_id'] == ROLE_STUDENT) {
+                                        header("Location: $base_url/student/profile/change_password.php");
+                                    } else {
+                                        header("Location: $base_url/change_password.php");
+                                    }
+                                    exit();
+                                }
 
                                 // Redirect to the page the user originally tried to access,
                                 // but re-validate the URL at the point of use — the value was
@@ -191,13 +217,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 unset($_SESSION['redirect_after_login']);
 
                                 // Default: redirect based on role
+                                $base_url = get_base_url();
                                 switch ($user['role_id']) {
-                                    case ROLE_ADMIN:     header("Location: admin/index.php");     exit();
-                                    case ROLE_HOD:       header("Location: hod/index.php");       exit();
-                                    case ROLE_SECRETARY: header("Location: secretary/index.php"); exit();
-                                    case ROLE_ADVISOR:   header("Location: advisor/index.php");   exit();
-                                    case ROLE_STUDENT:   header("Location: student/index.php");   exit();
-                                    case ROLE_QUALITY:   header("Location: quality/index.php");   exit();
+                                    case ROLE_ADMIN:     header("Location: $base_url/admin/index.php");     exit();
+                                    case ROLE_HOD:       header("Location: $base_url/hod/index.php");       exit();
+                                    case ROLE_SECRETARY: header("Location: $base_url/secretary/index.php"); exit();
+                                    case ROLE_ADVISOR:   header("Location: $base_url/advisor/index.php");   exit();
+                                    case ROLE_STUDENT:   header("Location: $base_url/student/index.php");   exit();
+                                    case ROLE_QUALITY:   header("Location: $base_url/quality/index.php");   exit();
                                     default:             $error = "Invalid user role. Please contact administrator.";
                                 }
 

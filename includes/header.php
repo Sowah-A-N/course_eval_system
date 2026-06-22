@@ -343,15 +343,54 @@ foreach ($_modules as $_mod => $_len) {
             text-decoration: underline;
         }
 
+        /* D6 — table overflow: every data table scrolls horizontally on small screens
+           without breaking the page layout */
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { min-width: 400px; }
+
+        /* D6 — hamburger toggle (hidden on desktop) */
+        .nav-toggle {
+            display: none;
+            background: rgba(255,255,255,.2);
+            border: none;
+            color: white;
+            font-size: 22px;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        /* D3 — inline confirm chip (two-step delete confirmation) */
+        .confirm-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #fff3cd; border: 1px solid #ffc107;
+            border-radius: 6px; padding: 4px 10px;
+            font-size: 13px; color: #856404;
+        }
+        .confirm-chip a { color: #c0392b; font-weight: 700; text-decoration: none; }
+        .confirm-chip a:hover { text-decoration: underline; }
+        .confirm-chip .cancel-confirm { color: #666; cursor: pointer; font-size: 16px; }
+
         /* Responsive */
         @media (max-width: 768px) {
             .top-bar {
-                flex-direction: column;
-                gap: 15px;
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 12px 15px;
             }
 
+            .top-bar-left { flex: 1; }
+
+            .nav-toggle { display: block; }
+
             .nav-menu ul {
+                display: none;
                 flex-direction: column;
+            }
+
+            .nav-menu ul.nav-open {
+                display: flex;
             }
 
             .nav-menu .dropdown-menu {
@@ -359,6 +398,7 @@ foreach ($_modules as $_mod => $_len) {
                 box-shadow: none;
                 border-left: 3px solid #667eea;
                 padding-left: 20px;
+                display: block !important; /* always visible when parent is open */
             }
 
             .main-content {
@@ -373,6 +413,8 @@ foreach ($_modules as $_mod => $_len) {
     <!-- Top Bar -->
     <div class="top-bar">
         <div class="top-bar-left">
+        <!-- D6: hamburger visible on mobile only -->
+        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
             <div>
                 <div class="app-name"><?php echo APP_SHORT_NAME; ?></div>
                 <div class="institution-name"><?php echo INSTITUTION_SHORT_NAME; ?></div>
@@ -415,17 +457,19 @@ foreach ($_modules as $_mod => $_len) {
                     </div>
                 </li>
                 <li class="dropdown">
-                    <a href="#">Departments ▾</a>
+                    <a href="#">Academics ▾</a>
                     <div class="dropdown-menu">
-                        <a href="<?php echo $base_url; ?>/admin/departments/list.php">View Departments</a>
-                        <a href="<?php echo $base_url; ?>/admin/departments/create.php">Create Department</a>
+                        <a href="<?php echo $base_url; ?>/admin/departments/list.php">Departments</a>
+                        <a href="<?php echo $base_url; ?>/admin/courses/list.php">Courses</a>
+                        <a href="<?php echo $base_url; ?>/admin/classes/list.php">Classes</a>
+                        <a href="<?php echo $base_url; ?>/admin/levels/list.php">Levels</a>
+                        <a href="<?php echo $base_url; ?>/admin/programmes/list.php">Programmes</a>
                     </div>
                 </li>
                 <li class="dropdown">
-                    <a href="#">Courses ▾</a>
+                    <a href="#">People ▾</a>
                     <div class="dropdown-menu">
-                        <a href="<?php echo $base_url; ?>/admin/courses/list.php">View Courses</a>
-                        <a href="<?php echo $base_url; ?>/admin/courses/create.php">Create Course</a>
+                        <a href="<?php echo $base_url; ?>/admin/advisors/list.php">Advisor Assignments</a>
                     </div>
                 </li>
                 <li class="dropdown">
@@ -437,15 +481,24 @@ foreach ($_modules as $_mod => $_len) {
                     </div>
                 </li>
                 <li class="dropdown">
-                    <a href="#">Settings ▾</a>
+                    <a href="#">Evaluations ▾</a>
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/admin/academic_years/list.php">Academic Years</a>
                         <a href="<?php echo $base_url; ?>/admin/semesters/index.php">Semesters</a>
                         <a href="<?php echo $base_url; ?>/admin/tokens/generate.php">Generate Tokens</a>
+                        <a href="<?php echo $base_url; ?>/admin/tokens/view.php">View Tokens</a>
                     </div>
                 </li>
                 <li>
                     <a href="<?php echo $base_url; ?>/admin/reports/index.php">Reports</a>
+                </li>
+                <li class="dropdown">
+                    <a href="#">System ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/admin/settings/index.php">System Settings</a>
+                        <a href="<?php echo $base_url; ?>/admin/settings/system_info.php">System Info</a>
+                        <a href="<?php echo $base_url; ?>/admin/settings/maintenance.php">Maintenance</a>
+                    </div>
                 </li>
 
             <?php elseif ($user_role == ROLE_HOD): ?>
@@ -466,6 +519,7 @@ foreach ($_modules as $_mod => $_len) {
                         <a href="<?php echo $base_url; ?>/hod/reports/department_report.php">Department Overview</a>
                         <a href="<?php echo $base_url; ?>/hod/reports/course_report.php">Course Reports</a>
                         <a href="<?php echo $base_url; ?>/hod/reports/lecturer_report.php">Lecturer Reports</a>
+                        <a href="<?php echo $base_url; ?>/hod/reports/completion_report.php">Completion Report</a>
                     </div>
                 </li>
 
@@ -483,11 +537,12 @@ foreach ($_modules as $_mod => $_len) {
                         Submission History
                     </a>
                 </li>
-                <li>
-                    <a href="<?php echo $base_url; ?>/student/profile/view.php"
-                        class="<?php echo $current_page == 'view.php' ? 'active' : ''; ?>">
-                        My Profile
-                    </a>
+                <li class="dropdown">
+                    <a href="#">My Account ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/student/profile/view.php">My Profile</a>
+                        <a href="<?php echo $base_url; ?>/student/profile/change_password.php">Change Password</a>
+                    </div>
                 </li>
 
             <?php elseif ($user_role == ROLE_QUALITY): ?>
@@ -513,19 +568,48 @@ foreach ($_modules as $_mod => $_len) {
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/advisor/reports/class_report.php">Class Report</a>
                         <a href="<?php echo $base_url; ?>/advisor/reports/completion_report.php">Completion Report</a>
+                        <a href="<?php echo $base_url; ?>/advisor/reports/advisor_performance.php">My Performance</a>
                     </div>
                 </li>
 
             <?php elseif ($user_role == ROLE_SECRETARY): ?>
                 <!-- Secretary Menu -->
-                <li>
-                    <a href="<?php echo $base_url; ?>/secretary/courses/list.php">Courses</a>
+                <li class="dropdown">
+                    <a href="#">Students ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/secretary/students/list.php">View Students</a>
+                        <a href="<?php echo $base_url; ?>/secretary/students/create.php">Add Student</a>
+                    </div>
                 </li>
-                <li>
-                    <a href="<?php echo $base_url; ?>/secretary/students/index.php">Students</a>
+                <li class="dropdown">
+                    <a href="#">Lecturers ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/secretary/lecturers/list.php">View Lecturers</a>
+                        <a href="<?php echo $base_url; ?>/secretary/lecturers/create.php">Add Lecturer</a>
+                    </div>
                 </li>
-                <li>
-                    <a href="<?php echo $base_url; ?>/secretary/reports/index.php">Reports</a>
+                <li class="dropdown">
+                    <a href="#">Courses ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/secretary/courses/list.php">View Courses</a>
+                        <a href="<?php echo $base_url; ?>/secretary/courses/create.php">Add Course</a>
+                    </div>
+                </li>
+                <li class="dropdown">
+                    <a href="#">Classes ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/secretary/classes/list.php">View Classes</a>
+                        <a href="<?php echo $base_url; ?>/secretary/classes/create.php">Add Class</a>
+                    </div>
+                </li>
+                <li class="dropdown">
+                    <a href="#">Reports ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/secretary/reports/index.php">Reports Overview</a>
+                        <a href="<?php echo $base_url; ?>/secretary/reports/department_overview.php">Department Overview</a>
+                        <a href="<?php echo $base_url; ?>/secretary/reports/evaluation_summary.php">Evaluation Summary</a>
+                        <a href="<?php echo $base_url; ?>/secretary/exports/index.php">Export Data</a>
+                    </div>
                 </li>
             <?php endif; ?>
         </ul>
@@ -557,3 +641,42 @@ foreach ($_modules as $_mod => $_len) {
             display_session_message();
         }
         ?>
+
+    <script>
+    // D6: hamburger nav toggle
+    (function(){
+        var btn = document.getElementById('nav-toggle');
+        var ul  = document.querySelector('.nav-menu ul');
+        if (!btn || !ul) return;
+        btn.addEventListener('click', function(){
+            var open = ul.classList.toggle('nav-open');
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }());
+
+    // D3: data-confirm links — first click shows an inline chip; second click follows href
+    (function(){
+        document.addEventListener('click', function(e){
+            var el = e.target.closest('a[data-confirm], button[data-confirm]');
+            if (!el) return;
+            // If there is already a confirm chip open for this element, let it proceed
+            if (el.dataset.confirmPending) return;
+            e.preventDefault();
+            var msg  = el.getAttribute('data-confirm') || 'Are you sure?';
+            var href = el.getAttribute('href') || '#';
+            // Build inline chip
+            var chip = document.createElement('span');
+            chip.className = 'confirm-chip';
+            chip.innerHTML = msg + '&nbsp; <a href="' + href + '">Yes, proceed</a>'
+                           + '&nbsp;<span class="cancel-confirm" title="Cancel">&times;</span>';
+            chip.querySelector('.cancel-confirm').addEventListener('click', function(){
+                chip.remove();
+                delete el.dataset.confirmPending;
+            });
+            el.dataset.confirmPending = '1';
+            el.insertAdjacentElement('afterend', chip);
+            // Auto-cancel after 5 s
+            setTimeout(function(){ chip.remove(); delete el.dataset.confirmPending; }, 5000);
+        });
+    }());
+    </script>

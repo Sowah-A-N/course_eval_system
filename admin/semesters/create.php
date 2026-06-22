@@ -9,7 +9,6 @@ check_login();
 if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Add New Semester';
 $errors=[];
-// Load academic years for the dropdown
 $academic_years=[];
 $result_ay=mysqli_query($conn,"SELECT academic_year_id,year_label FROM academic_year ORDER BY start_year DESC");
 while($row=mysqli_fetch_assoc($result_ay))$academic_years[]=$row;
@@ -17,11 +16,11 @@ if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid security token.';
 $academic_year_id=intval($_POST['academic_year_id']??0);
 $semester_name=trim($_POST['semester_name']??'');
-$semester_value=intval($_POST['semester_value']??0);
 $is_active=isset($_POST['is_active'])?1:0;
 if($academic_year_id==0)$errors[]='Academic year required.';
 if(!in_array($semester_name,['First','Second']))$errors[]='Semester name must be First or Second.';
-if($semester_value==0)$errors[]='Semester value required.';
+// A6: derive integer value from name — no separate field needed
+$semester_value=($semester_name==='First')?1:2;
 if(empty($errors)){
 $query_check="SELECT semester_id FROM semesters WHERE academic_year_id=? AND semester_name=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
@@ -64,7 +63,7 @@ require_once '../../includes/header.php';
 <p>Create a new semester configuration</p>
 </div>
 <div class="info-box">
-<strong>💡 Note:</strong> Each semester belongs to an academic year. Only "First" and "Second" semester names are supported.
+<strong>💡 Note:</strong> Each semester belongs to an academic year. The numeric value (1 or 2) is derived automatically from the name you select.
 </div>
 <?php if(!empty($errors)): ?>
 <div class="alert-error">
@@ -91,21 +90,13 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <div class="form-group">
-<label class="form-label required">Semester Name</label>
+<label class="form-label required">Semester</label>
 <select name="semester_name" class="form-select" required>
 <option value="">-- Select --</option>
-<option value="First" <?php echo(($_POST['semester_name']??'')==='First')?'selected':'';?>>First</option>
-<option value="Second" <?php echo(($_POST['semester_name']??'')==='Second')?'selected':'';?>>Second</option>
+<option value="First" <?php echo(($_POST['semester_name']??'')==='First')?'selected':'';?>>First (value: 1)</option>
+<option value="Second" <?php echo(($_POST['semester_name']??'')==='Second')?'selected':'';?>>Second (value: 2)</option>
 </select>
-</div>
-<div class="form-group">
-<label class="form-label required">Semester Value</label>
-<select name="semester_value" class="form-select" required>
-<option value="0">-- Select --</option>
-<option value="1" <?php echo(($_POST['semester_value']??'')==='1')?'selected':'';?>>1 (First)</option>
-<option value="2" <?php echo(($_POST['semester_value']??'')==='2')?'selected':'';?>>2 (Second)</option>
-</select>
-<small style="color:#666">Numeric ordering: First = 1, Second = 2</small>
+<small style="color:#666">The numeric ordering value is derived automatically.</small>
 </div>
 <div class="form-group">
 <label>

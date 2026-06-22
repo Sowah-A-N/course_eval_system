@@ -18,6 +18,37 @@
  */
 
 // ============================================
+// ENVIRONMENT DETECTION  (must be first — other constants depend on it)
+// ============================================
+//
+// Reads the APP_ENV environment variable set by the web server or shell.
+// Accepted values (case-insensitive): 'production', 'prod', 'development', 'dev', 'local'.
+// Anything other than a recognised production value is treated as development
+// so that a misconfigured server fails safe (verbose errors) rather than
+// silently running in a locked-down state that hides problems.
+//
+// HOW TO SET IT
+// ─────────────
+// Apache  (httpd.conf / .htaccess):   SetEnv APP_ENV production
+// Nginx   (fastcgi_params):           fastcgi_param APP_ENV production;
+// CLI / cron:                         APP_ENV=production php script.php
+// WAMP local dev:                     leave unset — defaults to 'development'
+//
+// WHY NOT $_SERVER['SERVER_NAME'] or $_SERVER['SERVER_ADDR']:
+//   Both of those values can be influenced by the HTTP Host request header
+//   on common Apache/Nginx configurations (UseCanonicalName Off is default).
+//   An attacker who sends "Host: localhost" to a production server could
+//   force IS_DEVELOPMENT = true, enabling verbose error output and relaxed
+//   security settings.  An environment variable is set by the server operator
+//   at deploy time and cannot be overridden by request headers.
+if (!defined('IS_DEVELOPMENT')) {
+    $_app_env = strtolower(trim((string)(getenv('APP_ENV') ?: 'development')));
+    define('IS_DEVELOPMENT', !in_array($_app_env, ['production', 'prod'], true));
+    define('IS_PRODUCTION',  !IS_DEVELOPMENT);
+    unset($_app_env);
+}
+
+// ============================================
 // ROLE DEFINITIONS
 // ============================================
 // These MUST match the role_id values in the roles table
@@ -520,35 +551,9 @@ define('SEMESTER_NAMES', [
 // ============================================
 // ENVIRONMENT DETECTION
 // ============================================
-
-/**
- * Environment detection
- *
- * Reads the APP_ENV environment variable set by the web server or shell.
- * Accepted values (case-insensitive): 'production', 'prod', 'development', 'dev', 'local'.
- * Anything other than a recognised production value is treated as development
- * so that a misconfigured server fails safe (verbose errors) rather than
- * silently running in a locked-down state that hides problems.
- *
- * HOW TO SET IT
- * ─────────────
- * Apache  (httpd.conf / .htaccess):   SetEnv APP_ENV production
- * Nginx   (fastcgi_params):           fastcgi_param APP_ENV production;
- * CLI / cron:                         APP_ENV=production php script.php
- * WAMP local dev:                     leave unset — defaults to 'development'
- *
- * WHY NOT $_SERVER['SERVER_NAME'] or $_SERVER['SERVER_ADDR']:
- *   Both of those values can be influenced by the HTTP Host request header
- *   on common Apache/Nginx configurations (UseCanonicalName Off is default).
- *   An attacker who sends "Host: localhost" to a production server could
- *   force IS_DEVELOPMENT = true, enabling verbose error output and relaxed
- *   security settings.  An environment variable is set by the server operator
- *   at deploy time and cannot be overridden by request headers.
- */
-$_app_env = strtolower(trim((string)(getenv('APP_ENV') ?: 'development')));
-define('IS_DEVELOPMENT', !in_array($_app_env, ['production', 'prod'], true));
-define('IS_PRODUCTION',  !IS_DEVELOPMENT);
-unset($_app_env);
+// (IS_DEVELOPMENT and IS_PRODUCTION are defined at the TOP of this file
+//  so that all subsequent constants — such as SESSION_COOKIE_SECURE and
+//  DB_DEBUG_MODE — can reference them without a forward-reference error.)
 
 // ============================================
 // DEBUG MODE

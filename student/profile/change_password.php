@@ -53,12 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     // Get form inputs
+    $forced = !empty($_SESSION['must_change_password']);
     $current_password = isset($_POST['current_password']) ? $_POST['current_password'] : '';
     $new_password = isset($_POST['new_password']) ? $_POST['new_password'] : '';
     $confirm_password = isset($_POST['confirm_password']) ? $_POST['confirm_password'] : '';
 
     // Validate inputs
-    if (empty($current_password)) {
+    if (!$forced && empty($current_password)) {
         $errors[] = 'Current password is required.';
     }
 
@@ -113,19 +114,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if (!$user) {
             $errors[] = 'User account not found.';
         } else {
-            // Verify current password
-            if (!password_verify($current_password, $user['password'])) {
+            // Skip current password check when forced change
+            $current_ok = $forced || password_verify($current_password, $user['password']);
+            if (!$current_ok) {
                 $errors[] = 'Current password is incorrect.';
             } else {
-                // Hash new password
                 $new_password_hash = password_hash($new_password, PASSWORD_DEFAULT);
 
-                // Update password in database
-                $query_update = "UPDATE user_details SET password = ? WHERE user_id = ?";
+                $query_update = "UPDATE user_details SET password=?, force_password_change=0 WHERE user_id=?";
                 $stmt_update = mysqli_prepare($conn, $query_update);
                 mysqli_stmt_bind_param($stmt_update, "si", $new_password_hash, $student_id);
 
                 if (mysqli_stmt_execute($stmt_update)) {
+                    unset($_SESSION['must_change_password']);
                     $_SESSION['flash_message'] = 'Password changed successfully!';
                     $_SESSION['flash_type'] = 'success';
                     header("Location: view.php");
@@ -386,6 +387,11 @@ require_once '../../includes/header.php';
             <form method="POST" action="" id="password-form">
                 <?php csrf_token_input(); ?>
 
+                <?php if (!empty($_SESSION['must_change_password'])): ?>
+                <div class="alert" style="background:#fff3cd;border:1px solid #ffc107;color:#856404;margin-bottom:20px;padding:14px;border-radius:8px">
+                    <strong>Action required:</strong> You must set a new password before continuing.
+                </div>
+                <?php else: ?>
                 <!-- Current Password -->
                 <div class="form-group">
                     <label for="current_password" class="form-label required">Current Password</label>
@@ -397,6 +403,7 @@ require_once '../../includes/header.php';
                         required
                         autocomplete="current-password">
                 </div>
+                <?php endif; ?>
 
                 <!-- New Password -->
                 <div class="form-group">

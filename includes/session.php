@@ -165,6 +165,23 @@ function check_login($redirect = true) {
     // Update last activity
     update_last_activity();
 
+    // C9: intercept any page load when the user has a forced password-change pending.
+    // Allow the change_password pages and logout through; block everything else.
+    if (!empty($_SESSION['must_change_password'])) {
+        $self = $_SERVER['PHP_SELF'] ?? '';
+        $allowed = strpos($self, 'change_password') !== false
+                || strpos($self, 'logout')          !== false;
+        if (!$allowed) {
+            $role = $_SESSION['role_id'] ?? 0;
+            if (defined('ROLE_STUDENT') && $role === ROLE_STUDENT) {
+                header("Location: " . get_base_url() . "/student/profile/change_password.php");
+            } else {
+                header("Location: " . get_base_url() . "/change_password.php");
+            }
+            exit();
+        }
+    }
+
     return true;
 }
 
@@ -418,9 +435,17 @@ function display_session_message() {
 
         $class = $class_map[$type] ?? 'alert-info';
 
-        echo '<div class="alert ' . $class . '" role="alert">';
+        // D7: unique ID so the JS auto-dismiss can target exactly this element
+        $fid = 'flash-' . substr(md5(uniqid('', true)), 0, 8);
+        echo '<div class="alert ' . $class . '" role="alert" id="' . $fid . '" style="position:relative;padding-right:40px">';
         echo $text;
+        echo '<button onclick="document.getElementById(\'' . $fid . '\').remove()" '
+           . 'style="position:absolute;top:50%;right:10px;transform:translateY(-50%);'
+           . 'background:none;border:none;font-size:20px;cursor:pointer;color:inherit;'
+           . 'opacity:.65;line-height:1" aria-label="Dismiss">&times;</button>';
         echo '</div>';
+        // Auto-dismiss after 5 seconds
+        echo '<script>setTimeout(function(){var e=document.getElementById("' . $fid . '");if(e)e.remove();},5000);</script>';
     }
 }
 
