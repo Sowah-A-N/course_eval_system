@@ -80,6 +80,11 @@ if (!defined('APP_NAME')) {
     require_once dirname(__DIR__) . '/config/constants.php';
 }
 
+// Ensure CSRF helpers are available (header uses csrf_token_input() for the period picker)
+if (!function_exists('csrf_token_input')) {
+    require_once __DIR__ . '/csrf.php';
+}
+
 // Get current page for active menu highlighting
 $current_page = basename($_SERVER['PHP_SELF']);
 $current_dir = basename(dirname($_SERVER['PHP_SELF']));
