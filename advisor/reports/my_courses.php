@@ -19,7 +19,7 @@ $active_period=mysqli_fetch_assoc($result_period);
 
 // All periods this lecturer has evaluations for
 $stmt_periods=mysqli_prepare($conn,
-    "SELECT DISTINCT ay.academic_year_id,ay.academic_year,s.semester_id,s.semester_name
+    "SELECT DISTINCT ay.academic_year_id,ay.year_label AS academic_year,s.semester_id,s.semester_name
      FROM evaluation_tokens et
      JOIN course_lecturers cl ON et.course_id=cl.course_id
      JOIN academic_year ay ON et.academic_year_id=ay.academic_year_id

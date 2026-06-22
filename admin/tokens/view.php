@@ -165,7 +165,7 @@ Showing: <strong><?php echo count($tokens);?></strong> token(s)
 </div>
 <div class="filter-group">
 <label>Search</label>
-<input type="text" name="search" placeholder="Student or course..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
+<input type="text" name="search" placeholder="Student or course..." value="<?php echo htmlspecialchars($search);?>" maxlength="100">
 </div>
 </div>
 <button type="submit" class="btn btn-primary">Apply Filters</button>

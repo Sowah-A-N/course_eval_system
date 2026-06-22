@@ -107,7 +107,8 @@ if($active_period){
     mysqli_stmt_bind_param($stmt_cc,"iii",
         $active_period['academic_year_id'],$active_period['semester_id'],$department_id);
     mysqli_stmt_execute($stmt_cc);
-    while($row=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_cc))){
+    $res_cc=mysqli_stmt_get_result($stmt_cc);
+    while($row=mysqli_fetch_assoc($res_cc)){
         $t=(int)$row['total_tokens'];
         $u=(int)$row['used_tokens'];
         $row['rate']=$t>0?round($u/$t*100,1):0;

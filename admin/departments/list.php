@@ -87,7 +87,7 @@ Total: <strong><?php echo count($departments);?></strong> department(s)
 </div>
 <div class="filters-section">
 <form method="GET" style="display:flex;gap:10px;align-items:center">
-<input type="text" name="search" placeholder="Search by name or code..." value="<?php echo htmlspecialchars($search);? maxlength="100">" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:5px">
+<input type="text" name="search" placeholder="Search by name or code..." value="<?php echo htmlspecialchars($search);?>" maxlength="100" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:5px">
 <button type="submit" class="btn btn-primary">Search</button>
 <a href="list.php" class="btn btn-secondary">Reset</a>
 <button type="button" onclick="exportData()" class="btn btn-success">Export CSV</button>

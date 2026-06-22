@@ -131,7 +131,7 @@ Total: <strong><?php echo count($users);?></strong> user(s)
 </div>
 <div class="filter-group">
 <label>Search</label>
-<input type="text" name="search" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
+<input type="text" name="search" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search);?>" maxlength="100">
 </div>
 </div>
 <button type="submit" class="btn btn-primary">Apply Filters</button>

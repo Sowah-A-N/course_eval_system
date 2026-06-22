@@ -66,7 +66,7 @@ Total: <strong><?php echo count($classes);?></strong> class(es)
 <form method="GET" style="display:flex;gap:10px;align-items:flex-end">
 <div class="filter-group" style="flex:1">
 <label>Search</label>
-<input type="text" name="search" placeholder="Class name or code..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
+<input type="text" name="search" placeholder="Class name or code..." value="<?php echo htmlspecialchars($search);?>" maxlength="100">
 </div>
 <button type="submit" class="btn btn-primary">Search</button>
 <a href="list.php" class="btn btn-secondary">Reset</a>

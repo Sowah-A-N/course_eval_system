@@ -127,7 +127,7 @@ require_once '../../includes/header.php';
             </div>
             <div class="filter-group">
                 <label>Search</label>
-                <input type="text" name="search" placeholder="Name or email..." value="<?php echo htmlspecialchars($search);? maxlength="100">">
+                <input type="text" name="search" placeholder="Name or email..." value="<?php echo htmlspecialchars($search);?>" maxlength="100">
             </div>
         </div>
         <button type="submit" class="btn btn-primary">Apply Filters</button>
