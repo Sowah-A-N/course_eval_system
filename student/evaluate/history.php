@@ -469,7 +469,7 @@ require_once '../../includes/header.php';
                     name="search"
                     id="search"
                     placeholder="Course code or name"
-                    value="<?php echo htmlspecialchars($search_query); ? maxlength="100">">
+                    value="<?php echo htmlspecialchars($search_query); ?>" maxlength="100">
             </div>
 
             <!-- Sort Order -->
