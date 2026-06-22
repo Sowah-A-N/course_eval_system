@@ -45,7 +45,7 @@ $types.='sss';
 $where_clause=implode(' AND ',$where);
 $query="
 SELECT et.token_id,et.token,et.is_used,et.created_at,et.used_at,
-u.f_name,u.l_name,u.unique_id,
+u.f_name,u.l_name,
 c.course_code,c.name as course_name,
 d.dep_name,
 l.level_name,
@@ -198,8 +198,7 @@ Showing: <strong><?php echo count($tokens);?></strong> token(s)
 <?php foreach($tokens as $token): ?>
 <tr>
 <td>
-<strong><?php echo htmlspecialchars($token['f_name'].' '.$token['l_name']);?></strong><br>
-<small style="color:#999"><?php echo htmlspecialchars($token['unique_id']);?></small>
+<strong><?php echo htmlspecialchars($token['f_name'].' '.$token['l_name']);?></strong>
 </td>
 <td>
 <strong><?php echo htmlspecialchars($token['course_code']);?></strong><br>

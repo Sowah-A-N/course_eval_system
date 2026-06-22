@@ -50,7 +50,7 @@ if(in_array($role,[ROLE_ADMIN,ROLE_SECRETARY,ROLE_HOD])){
             ROLE_SECRETARY => 'secretary/students/list.php',
             default        => 'hod/students/list.php',
         };
-        $results[]=['type'=>'Student','label'=>htmlspecialchars($r['f_name'].' '.$r['l_name']),'sub'=>htmlspecialchars($r['unique_id']),'url'=>$url];
+        $results[]=['type'=>'Student','label'=>htmlspecialchars($r['f_name'].' '.$r['l_name']),'sub'=>'','url'=>$url];
     }
     mysqli_stmt_close($stmt);
 }
@@ -71,7 +71,7 @@ if(in_array($role,[ROLE_ADMIN,ROLE_HOD])){
     mysqli_stmt_execute($stmt);
     while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))){
         $url = ($role===ROLE_ADMIN) ? 'admin/users/list.php' : 'hod/lecturers/list.php';
-        $results[]=['type'=>'Lecturer','label'=>htmlspecialchars($r['f_name'].' '.$r['l_name']),'sub'=>htmlspecialchars($r['unique_id']),'url'=>$url];
+        $results[]=['type'=>'Lecturer','label'=>htmlspecialchars($r['f_name'].' '.$r['l_name']),'sub'=>'','url'=>$url];
     }
     mysqli_stmt_close($stmt);
 }

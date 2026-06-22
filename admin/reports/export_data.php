@@ -74,11 +74,10 @@ fputcsv($output,csv_safe([$row['evaluation_id'],$row['course_code'],$row['name']
 // was used — this is operational data (not evaluation content) and is appropriate
 // for admin review.  student_user_id is included here because this is pre/post
 // submission housekeeping, not the evaluation data itself.
-fputcsv($output,['Token ID','Student ID','Course Code','Course Name','Department','Created Date','Used']);
+fputcsv($output,['Token ID','Course Code','Course Name','Department','Created Date','Used']);
 $q_where="1=1".$per_et_where;
-$query="SELECT et.token_id,COALESCE(u.unique_id,'[anonymised]') AS unique_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used
+$query="SELECT et.token_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used
     FROM evaluation_tokens et
-    LEFT JOIN user_details u ON et.student_user_id=u.user_id
     JOIN courses c ON et.course_id=c.id
     LEFT JOIN department d ON c.department_id=d.t_id
     WHERE $q_where
@@ -91,7 +90,7 @@ if(empty($per_et_params)){
     mysqli_stmt_execute($stmt);$result=mysqli_stmt_get_result($stmt);
 }
 while($row=mysqli_fetch_assoc($result)){
-fputcsv($output,csv_safe([$row['token_id'],$row['unique_id'],$row['course_code'],$row['name'],$row['dep_name'],$row['created_at'],$row['is_used']?'Yes':'No']));
+fputcsv($output,csv_safe([$row['token_id'],$row['course_code'],$row['name'],$row['dep_name'],$row['created_at'],$row['is_used']?'Yes':'No']));
 }
 }elseif($type=='responses'){
 fputcsv($output,['Response ID','Evaluation ID','Question','Rating']);

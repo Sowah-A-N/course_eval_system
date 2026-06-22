@@ -84,17 +84,13 @@ if (empty($level_ids)) {
             u.user_id,
             u.f_name,
             u.l_name,
-            u.username,
             u.email,
-            u.unique_id,
             u.is_active,
             l.level_name,
             l.level_number,
             c.class_name,
             d.dep_name,
-            d.dep_code,
-            (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id) as total_tokens,
-            (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id AND et.is_used = 1) as completed_tokens
+            d.dep_code
         FROM user_details u
         LEFT JOIN level l ON u.level_id = l.t_id
         LEFT JOIN classes c ON u.class_id = c.t_id
@@ -111,7 +107,7 @@ if (empty($level_ids)) {
     
     // Add search filter
     if (!empty($search_query)) {
-        $query .= " AND (u.f_name LIKE ? OR u.l_name LIKE ? OR u.email LIKE ? OR u.unique_id LIKE ?)";
+        $query .= " AND (u.f_name LIKE ? OR u.l_name LIKE ? OR u.email LIKE ?)";
     }
     
     // Add sorting
@@ -131,8 +127,8 @@ if (empty($level_ids)) {
         case 'status':
             $query .= " ORDER BY u.is_active $sort_order, u.f_name ASC";
             break;
-        case 'completion':
-            $query .= " ORDER BY completed_tokens $sort_order, u.f_name ASC";
+        case 'completion': // removed — completion data not shown to advisors
+            $query .= " ORDER BY u.f_name ASC, u.l_name ASC";
             break;
         default:
             $query .= " ORDER BY u.f_name ASC, u.l_name ASC";
@@ -164,29 +160,22 @@ if (empty($level_ids)) {
     // Add search parameters
     if (!empty($search_query)) {
         $search_param = "%$search_query%";
-        $types .= 'ssss';
-        $params[] = $search_param;
+        $types .= 'sss';
         $params[] = $search_param;
         $params[] = $search_param;
         $params[] = $search_param;
     }
-    
+
     // Bind parameters
     mysqli_stmt_bind_param($stmt, $types, ...$params);
-    
+
     // Execute query
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
-    
+
     // Fetch students
     $students = [];
     while ($row = mysqli_fetch_assoc($result)) {
-        // Calculate completion percentage
-        if ($row['total_tokens'] > 0) {
-            $row['completion_percentage'] = round(($row['completed_tokens'] / $row['total_tokens']) * 100, 1);
-        } else {
-            $row['completion_percentage'] = 0;
-        }
         $students[] = $row;
     }
     
@@ -427,25 +416,6 @@ require_once '../../includes/header.php';
             </div>
             <div class="stat-label">Active Students</div>
         </div>
-        <div class="stat-box">
-            <div class="stat-value">
-                <?php 
-                $completed_students = count(array_filter($students, function($s) { return $s['completed_tokens'] > 0; }));
-                echo $completed_students;
-                ?>
-            </div>
-            <div class="stat-label">Students with Evaluations</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-value">
-                <?php 
-                $completion_rate = count($students) > 0 ? 
-                    round(($completed_students / count($students)) * 100, 1) : 0;
-                echo $completion_rate;
-                ?>%
-            </div>
-            <div class="stat-label">Participation Rate</div>
-        </div>
     </div>
 
     <!-- Filters -->
@@ -472,8 +442,8 @@ require_once '../../includes/header.php';
                     <input type="text" 
                            name="search" 
                            id="search" 
-                           placeholder="Name, Email, or Student ID"
-                           value="<?php echo htmlspecialchars($search_query); ? maxlength="100">">
+                           placeholder="Name or Email"
+                           value="<?php echo htmlspecialchars($search_query); ?>" maxlength="100">
                 </div>
                 
                 <!-- Sort By -->
@@ -485,7 +455,6 @@ require_once '../../includes/header.php';
                         <option value="class" <?php echo $sort_by == 'class' ? 'selected' : ''; ?>>Class</option>
                         <option value="email" <?php echo $sort_by == 'email' ? 'selected' : ''; ?>>Email</option>
                         <option value="status" <?php echo $sort_by == 'status' ? 'selected' : ''; ?>>Status</option>
-                        <option value="completion" <?php echo $sort_by == 'completion' ? 'selected' : ''; ?>>Completion</option>
                     </select>
                 </div>
             </div>
@@ -517,7 +486,6 @@ require_once '../../includes/header.php';
                                 Student Name <?php echo $sort_by == 'name' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th scope="col">Student ID</th>
                         <th scope="col">
                             <a href="?sort=email&order=<?php echo $sort_by == 'email' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
                                 Email <?php echo $sort_by == 'email' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
@@ -538,11 +506,6 @@ require_once '../../includes/header.php';
                                 Status <?php echo $sort_by == 'status' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
                             </a>
                         </th>
-                        <th scope="col">
-                            <a href="?sort=completion&order=<?php echo $sort_by == 'completion' && $sort_order == 'ASC' ? 'desc' : 'asc'; ?>&level_id=<?php echo $filter_level; ?>&search=<?php echo urlencode($search_query); ?>">
-                                Evaluations <?php echo $sort_by == 'completion' ? ($sort_order == 'ASC' ? '↑' : '↓') : ''; ?>
-                            </a>
-                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -553,7 +516,6 @@ require_once '../../includes/header.php';
                                     <?php echo htmlspecialchars($student['f_name'] . ' ' . $student['l_name']); ?>
                                 </strong>
                             </td>
-                            <td><?php echo htmlspecialchars($student['unique_id'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars($student['email']); ?></td>
                             <td><?php echo htmlspecialchars($student['level_name'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars($student['class_name'] ?? 'N/A'); ?></td>
@@ -563,13 +525,6 @@ require_once '../../includes/header.php';
                                 <?php else: ?>
                                     <span class="status-badge status-inactive">Inactive</span>
                                 <?php endif; ?>
-                            </td>
-                            <td>
-                                <div class="progress-mini">
-                                    <div class="progress-mini-bar" style="width: <?php echo $student['completion_percentage']; ?>%;"></div>
-                                </div>
-                                <?php echo $student['completed_tokens']; ?>/<?php echo $student['total_tokens']; ?>
-                                (<?php echo $student['completion_percentage']; ?>%)
                             </td>
                         </tr>
                     <?php endforeach; ?>

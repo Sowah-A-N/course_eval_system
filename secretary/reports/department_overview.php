@@ -199,7 +199,6 @@ require_once '../../includes/header.php';
             <div class="data-row">
                 <span class="data-label">
                     <?php echo htmlspecialchars($student['f_name'] . ' ' . $student['l_name']); ?>
-                    <small style="color: #999;">(<?php echo htmlspecialchars($student['unique_id']); ?>)</small>
                 </span>
                 <span class="data-value"><?php echo date('M d, Y', strtotime($student['date_created'])); ?></span>
             </div>
