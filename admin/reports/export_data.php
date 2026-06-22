@@ -52,9 +52,9 @@ fputcsv($output,csv_safe([$row['evaluation_id'],$row['course_code'],$row['name']
 // for admin review.  student_user_id is included here because this is pre/post
 // submission housekeeping, not the evaluation data itself.
 fputcsv($output,['Token ID','Student ID','Course Code','Course Name','Department','Created Date','Used']);
-$query="SELECT et.token_id,u.unique_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used
+$query="SELECT et.token_id,COALESCE(u.unique_id,'[anonymised]') AS unique_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used
     FROM evaluation_tokens et
-    JOIN user_details u ON et.student_user_id=u.user_id
+    LEFT JOIN user_details u ON et.student_user_id=u.user_id
     JOIN courses c ON et.course_id=c.id
     LEFT JOIN department d ON c.department_id=d.t_id
     ORDER BY et.created_at DESC";

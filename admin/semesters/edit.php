@@ -39,6 +39,63 @@ mysqli_stmt_bind_param($stmt,"siii",$semester_name,$semester_value,$is_active,$s
 if(mysqli_stmt_execute($stmt)){
 log_audit($conn,$_SESSION['user_id'],'SEMESTER_UPDATE','semesters',$semester_id,['semester_name'=>$semester['semester_name'],'semester_value'=>$semester['semester_value'],'is_active'=>$semester['is_active']],['semester_name'=>$semester_name,'semester_value'=>$semester_value,'is_active'=>$is_active]);
 
+// B1: when a semester is activated (0→1), auto-generate tokens for all dept×level combos
+if($semester['is_active']==0 && $is_active==1){
+    $result_ap=mysqli_query($conn,"SELECT academic_year_id FROM semesters WHERE semester_id=$semester_id LIMIT 1");
+    $ap_row=mysqli_fetch_assoc($result_ap);
+    $year_id=$ap_row['academic_year_id'];
+    $role=ROLE_STUDENT;
+    $stmt_pairs=mysqli_prepare($conn,
+        "SELECT DISTINCT u.department_id, u.level_id
+         FROM user_details u WHERE u.role_id=? AND u.is_active=1");
+    mysqli_stmt_bind_param($stmt_pairs,"i",$role);
+    mysqli_stmt_execute($stmt_pairs);
+    $pairs_res=mysqli_stmt_get_result($stmt_pairs);
+    $auto_gen=0;
+    while($pair=mysqli_fetch_assoc($pairs_res)){
+        $did=$pair['department_id'];
+        $lid=$pair['level_id'];
+        $stmt_s=mysqli_prepare($conn,
+            "SELECT DISTINCT user_id FROM user_details WHERE department_id=? AND level_id=? AND role_id=? AND is_active=1");
+        mysqli_stmt_bind_param($stmt_s,"iii",$did,$lid,$role);
+        mysqli_stmt_execute($stmt_s);
+        $students=[];
+        while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_s)))$students[]=$r['user_id'];
+        mysqli_stmt_close($stmt_s);
+        $stmt_c=mysqli_prepare($conn,"SELECT id FROM courses WHERE department_id=? AND level_id=?");
+        mysqli_stmt_bind_param($stmt_c,"ii",$did,$lid);
+        mysqli_stmt_execute($stmt_c);
+        $courses=[];
+        while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_c)))$courses[]=$r['id'];
+        mysqli_stmt_close($stmt_c);
+        foreach($students as $sid){
+            foreach($courses as $cid){
+                $stmt_chk=mysqli_prepare($conn,
+                    "SELECT token_id FROM evaluation_tokens WHERE student_user_id=? AND course_id=? AND academic_year_id=? AND semester_id=?");
+                mysqli_stmt_bind_param($stmt_chk,"iiii",$sid,$cid,$year_id,$semester_id);
+                mysqli_stmt_execute($stmt_chk);
+                if(mysqli_stmt_get_result($stmt_chk)->num_rows>0){mysqli_stmt_close($stmt_chk);continue;}
+                mysqli_stmt_close($stmt_chk);
+                $token=bin2hex(random_bytes(TOKEN_LENGTH));
+                $stmt_i=mysqli_prepare($conn,
+                    "INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,is_used) VALUES (?,?,?,?,?,0)");
+                mysqli_stmt_bind_param($stmt_i,"siiii",$token,$sid,$cid,$year_id,$semester_id);
+                if(mysqli_stmt_execute($stmt_i))$auto_gen++;
+                mysqli_stmt_close($stmt_i);
+            }
+        }
+    }
+    mysqli_stmt_close($stmt_pairs);
+    if($auto_gen>0){
+        log_audit($conn,$_SESSION['user_id'],AUDIT_TOKEN_GENERATE,'evaluation_tokens',null,null,
+            ['auto'=>true,'count'=>$auto_gen,'semester_id'=>$semester_id,'academic_year_id'=>$year_id]);
+        $_SESSION['flash_message']="Semester updated and $auto_gen evaluation token(s) generated automatically.";
+        $_SESSION['flash_type']='success';
+        header("Location:list.php");
+        exit();
+    }
+}
+
 // B7: when a semester transitions from active → inactive, expire all unused tokens
 // so students can no longer access them. Completed tokens (is_used=1) are kept.
 if($semester['is_active']==1 && $is_active==0){

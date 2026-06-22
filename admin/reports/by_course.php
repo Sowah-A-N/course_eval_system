@@ -8,9 +8,18 @@ if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denie
 $page_title='Course Evaluation Report';
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
 $filter_course=isset($_GET['course_id'])?intval($_GET['course_id']):0;
+// D4: academic year + semester filter
+$filter_year=isset($_GET['year_id'])?intval($_GET['year_id']):0;
+$filter_sem=isset($_GET['semester_id'])?intval($_GET['semester_id']):0;
 $departments=[];
 $result_depts=mysqli_query($conn,"SELECT * FROM department ORDER BY dep_name");
 while($row=mysqli_fetch_assoc($result_depts))$departments[]=$row;
+$academic_years=[];
+$result_years=mysqli_query($conn,"SELECT academic_year_id,academic_year FROM academic_years ORDER BY academic_year DESC");
+while($row=mysqli_fetch_assoc($result_years))$academic_years[]=$row;
+$semesters=[];
+$result_sems=mysqli_query($conn,"SELECT semester_id,semester_name FROM semesters ORDER BY semester_value");
+while($row=mysqli_fetch_assoc($result_sems))$semesters[]=$row;
 $courses=[];
 if($filter_dept>0){
 $query_courses="SELECT id,course_code,name FROM courses WHERE department_id=? ORDER BY course_code";
@@ -24,16 +33,26 @@ mysqli_stmt_close($stmt_courses);
 $report_data=null;
 if($filter_course>0){
 $min_responses=MIN_RESPONSE_COUNT;
-$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,COUNT(DISTINCT et.token_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id LEFT JOIN evaluations e ON et.token=e.token WHERE c.id=? GROUP BY c.id";
+// Build token scope conditions
+$token_where="et.course_id=c.id";
+$tok_params_main=[];$tok_types_main='';
+if($filter_year>0){$token_where.=" AND et.academic_year_id=?";$tok_params_main[]=$filter_year;$tok_types_main.='i';}
+if($filter_sem>0){$token_where.=" AND et.semester_id=?";$tok_params_main[]=$filter_sem;$tok_types_main.='i';}
+$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,COUNT(DISTINCT et.token_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluation_tokens et ON $token_where LEFT JOIN evaluations e ON et.token=e.token WHERE c.id=? GROUP BY c.id";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"i",$filter_course);
+$bp=[...$tok_params_main,$filter_course];$bt=$tok_types_main.'i';
+mysqli_stmt_bind_param($stmt,$bt,...$bp);
 mysqli_stmt_execute($stmt);
 $report_data=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if($report_data&&$report_data['response_count']>=$min_responses){
-$query_ratings="SELECT eq.question_text,AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating,COUNT(r.id)as rating_count FROM responses r JOIN evaluation_questions eq ON r.question_id=eq.question_id JOIN evaluations e ON r.evaluation_id=e.evaluation_id JOIN evaluation_tokens et ON e.token=et.token WHERE et.course_id=? GROUP BY r.question_id,eq.question_text ORDER BY eq.display_order";
+$yr_extra='';$yr_params=[];$yr_types='';
+if($filter_year>0){$yr_extra.=" AND et.academic_year_id=?";$yr_params[]=$filter_year;$yr_types.='i';}
+if($filter_sem>0){$yr_extra.=" AND et.semester_id=?";$yr_params[]=$filter_sem;$yr_types.='i';}
+$query_ratings="SELECT eq.question_text,AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating,COUNT(r.id)as rating_count FROM responses r JOIN evaluation_questions eq ON r.question_id=eq.question_id JOIN evaluations e ON r.evaluation_id=e.evaluation_id JOIN evaluation_tokens et ON e.token=et.token WHERE et.course_id=?$yr_extra GROUP BY r.question_id,eq.question_text ORDER BY eq.display_order";
 $stmt_ratings=mysqli_prepare($conn,$query_ratings);
-mysqli_stmt_bind_param($stmt_ratings,"i",$filter_course);
+$rp=array_merge([$filter_course],$yr_params);$rt='i'.$yr_types;
+mysqli_stmt_bind_param($stmt_ratings,$rt,...$rp);
 mysqli_stmt_execute($stmt_ratings);
 $result_ratings=mysqli_stmt_get_result($stmt_ratings);
 $ratings=[];
@@ -90,7 +109,26 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <?php endif;?>
+<div class="filter-group">
+<label>Academic Year</label>
+<select name="year_id">
+<option value="0">All Years</option>
+<?php foreach($academic_years as $yr): ?>
+<option value="<?php echo $yr['academic_year_id'];?>" <?php echo $filter_year==$yr['academic_year_id']?'selected':'';?>><?php echo htmlspecialchars($yr['academic_year']);?></option>
+<?php endforeach;?>
+</select>
 </div>
+<div class="filter-group">
+<label>Semester</label>
+<select name="semester_id">
+<option value="0">All Semesters</option>
+<?php foreach($semesters as $sem): ?>
+<option value="<?php echo $sem['semester_id'];?>" <?php echo $filter_sem==$sem['semester_id']?'selected':'';?>><?php echo htmlspecialchars($sem['semester_name']);?></option>
+<?php endforeach;?>
+</select>
+</div>
+</div>
+<button type="submit" class="btn btn-primary">Apply Filters</button>
 </form>
 </div>
 <?php if($report_data): ?>

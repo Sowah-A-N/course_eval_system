@@ -95,8 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['token']) && !isset($_
 // On a form POST (Path 3) we will clear it after successful submission below.
 $token = $_SESSION['pending_eval_token'] ?? '';
 
-$expected_token_length = TOKEN_LENGTH * 2; // 32 bytes → 64 hex chars
-
 if (
     empty($token) ||
     strlen($token) !== $expected_token_length ||
@@ -323,7 +321,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // See /database/migrations/002_nullable_student_user_id.sql
             $query_update_token = "
                 UPDATE evaluation_tokens
-                SET is_used = 1, used_at = NOW(), student_user_id = NULL
+                SET is_used = 1, used_at = NOW()
                 WHERE token = ?
             ";
 

@@ -90,6 +90,33 @@ mysqli_stmt_close($stmt_stats);
 $completion_rate = $stats['total_tokens'] > 0 ?
     round(($stats['completed_tokens'] / $stats['total_tokens']) * 100, 1) : 0;
 
+// C3: per-course completion rates for the active period
+$course_completion = [];
+if($active_period){
+    $query_cc="
+        SELECT c.course_code, c.name AS course_name,
+               COUNT(et.token_id) AS total_tokens,
+               SUM(et.is_used) AS used_tokens
+        FROM courses c
+        LEFT JOIN evaluation_tokens et ON et.course_id=c.id
+            AND et.academic_year_id=? AND et.semester_id=?
+        WHERE c.department_id=?
+        GROUP BY c.id
+        ORDER BY c.course_code";
+    $stmt_cc=mysqli_prepare($conn,$query_cc);
+    mysqli_stmt_bind_param($stmt_cc,"iii",
+        $active_period['academic_year_id'],$active_period['semester_id'],$department_id);
+    mysqli_stmt_execute($stmt_cc);
+    while($row=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_cc))){
+        $t=(int)$row['total_tokens'];
+        $u=(int)$row['used_tokens'];
+        $row['rate']=$t>0?round($u/$t*100,1):0;
+        $row['status']=$row['rate']>=60?'green':($row['rate']>=30?'amber':'red');
+        $course_completion[]=$row;
+    }
+    mysqli_stmt_close($stmt_cc);
+}
+
 // Get top-rated courses (min 5 responses)
 $query_top_courses = "
     SELECT
@@ -306,6 +333,22 @@ require_once '../includes/header.php';
         font-size: 12px;
         color: #999;
     }
+
+    /* C3 completion rate widget */
+    .completion-table{width:100%;border-collapse:collapse}
+    .completion-table th{text-align:left;padding:10px 12px;font-size:13px;color:#666;border-bottom:2px solid #e0e0e0}
+    .completion-table td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f5f5f5}
+    .completion-table tr:last-child td{border-bottom:none}
+    .rate-bar-wrap{background:#e0e0e0;height:8px;border-radius:4px;min-width:80px;overflow:hidden}
+    .rate-bar-fill{height:100%;border-radius:4px;transition:width 0.4s}
+    .rate-bar-fill.green{background:#28a745}
+    .rate-bar-fill.amber{background:#fd7e14}
+    .rate-bar-fill.red{background:#dc3545}
+    .status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+    .status-dot.green{background:#28a745}
+    .status-dot.amber{background:#fd7e14}
+    .status-dot.red{background:#dc3545}
+    .legend{display:flex;gap:16px;font-size:12px;color:#666;margin-top:10px}
 </style>
 
 <!-- Welcome Banner -->
@@ -381,6 +424,45 @@ require_once '../includes/header.php';
         <div class="action-btn-desc">Individual lecturer performance</div>
     </a>
 </div>
+
+<!-- C3: Course Completion Rates -->
+<?php if(!empty($course_completion)): ?>
+<h2 class="section-title">Course Completion Rates — Current Period</h2>
+<div class="course-list" style="overflow-x:auto">
+<table class="completion-table">
+<thead>
+<tr>
+<th>Course</th>
+<th>Submitted / Total</th>
+<th>Rate</th>
+<th style="min-width:120px">Progress</th>
+</tr>
+</thead>
+<tbody>
+<?php foreach($course_completion as $cc): ?>
+<tr>
+<td>
+    <strong><?php echo htmlspecialchars($cc['course_code']);?></strong><br>
+    <span style="font-size:12px;color:#666"><?php echo htmlspecialchars($cc['course_name']);?></span>
+</td>
+<td style="color:#555"><?php echo (int)$cc['used_tokens'];?> / <?php echo (int)$cc['total_tokens'];?></td>
+<td><span class="status-dot <?php echo $cc['status'];?>"></span><?php echo $cc['rate'];?>%</td>
+<td>
+    <div class="rate-bar-wrap">
+        <div class="rate-bar-fill <?php echo $cc['status'];?>" style="width:<?php echo $cc['rate'];?>%"></div>
+    </div>
+</td>
+</tr>
+<?php endforeach;?>
+</tbody>
+</table>
+<div class="legend">
+<span><span class="status-dot green" style="display:inline-block"></span> ≥ 60% on track</span>
+<span><span class="status-dot amber" style="display:inline-block"></span> 30–59% needs attention</span>
+<span><span class="status-dot red" style="display:inline-block"></span> &lt; 30% critical</span>
+</div>
+</div>
+<?php endif;?>
 
 <!-- Top Rated Courses -->
 <?php if (!empty($top_courses)): ?>

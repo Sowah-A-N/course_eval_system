@@ -8,17 +8,28 @@ if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denie
 $page_title='Completion Status';
 $filter_dept=isset($_GET['department_id'])?intval($_GET['department_id']):0;
 $filter_level=isset($_GET['level_id'])?intval($_GET['level_id']):0;
+// D4: academic year + semester filter
+$filter_year=isset($_GET['year_id'])?intval($_GET['year_id']):0;
+$filter_sem=isset($_GET['semester_id'])?intval($_GET['semester_id']):0;
 $departments=[];
 $result_depts=mysqli_query($conn,"SELECT * FROM department ORDER BY dep_name");
 while($row=mysqli_fetch_assoc($result_depts))$departments[]=$row;
 $levels=[];
 $result_levels=mysqli_query($conn,"SELECT * FROM level ORDER BY level_number");
 while($row=mysqli_fetch_assoc($result_levels))$levels[]=$row;
+$academic_years=[];
+$result_years=mysqli_query($conn,"SELECT academic_year_id,academic_year FROM academic_years ORDER BY academic_year DESC");
+while($row=mysqli_fetch_assoc($result_years))$academic_years[]=$row;
+$semesters=[];
+$result_sems=mysqli_query($conn,"SELECT semester_id,semester_name FROM semesters ORDER BY semester_value");
+while($row=mysqli_fetch_assoc($result_sems))$semesters[]=$row;
 $where=["1=1"];
 $params=[];
 $types='';
 if($filter_dept>0){$where[]="u.department_id=?";$params[]=$filter_dept;$types.='i';}
 if($filter_level>0){$where[]="u.level_id=?";$params[]=$filter_level;$types.='i';}
+if($filter_year>0){$where[]="et.academic_year_id=?";$params[]=$filter_year;$types.='i';}
+if($filter_sem>0){$where[]="et.semester_id=?";$params[]=$filter_sem;$types.='i';}
 $where_clause=implode(' AND ',$where);
 $query="SELECT u.user_id,u.unique_id,u.f_name,u.l_name,d.dep_name,l.level_name,COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as completed_tokens FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id LEFT JOIN level l ON u.level_id=l.t_id LEFT JOIN evaluation_tokens et ON u.user_id=et.student_user_id WHERE u.role_id=? AND $where_clause GROUP BY u.user_id ORDER BY u.f_name,u.l_name";
 $stmt=mysqli_prepare($conn,$query);
@@ -73,6 +84,24 @@ require_once '../../includes/header.php';
 <option value="0">All Levels</option>
 <?php foreach($levels as $level): ?>
 <option value="<?php echo $level['t_id'];?>" <?php echo $filter_level==$level['t_id']?'selected':'';?>><?php echo htmlspecialchars($level['level_name']);?></option>
+<?php endforeach;?>
+</select>
+</div>
+<div class="filter-group">
+<label>Academic Year</label>
+<select name="year_id">
+<option value="0">All Years</option>
+<?php foreach($academic_years as $yr): ?>
+<option value="<?php echo $yr['academic_year_id'];?>" <?php echo $filter_year==$yr['academic_year_id']?'selected':'';?>><?php echo htmlspecialchars($yr['academic_year']);?></option>
+<?php endforeach;?>
+</select>
+</div>
+<div class="filter-group">
+<label>Semester</label>
+<select name="semester_id">
+<option value="0">All Semesters</option>
+<?php foreach($semesters as $sem): ?>
+<option value="<?php echo $sem['semester_id'];?>" <?php echo $filter_sem==$sem['semester_id']?'selected':'';?>><?php echo htmlspecialchars($sem['semester_name']);?></option>
 <?php endforeach;?>
 </select>
 </div>
