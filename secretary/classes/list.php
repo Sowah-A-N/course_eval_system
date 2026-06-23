@@ -8,18 +8,17 @@ if($_SESSION['role_id'] !== ROLE_SECRETARY){$_SESSION['flash_message']='Access d
 $department_id=$_SESSION['department_id'];
 $page_title='Manage Classes';
 $search=isset($_GET['search'])?trim($_GET['search']):'';
-//$where=["department_id=?"];
-$where[] = "1=1";
+$where=["c.department_id=?"];
 $params=[$department_id];
 $types='i';
 if(!empty($search)){
-$where[]="class_name LIKE ?";
+$where[]="c.class_name LIKE ?";
 $search_param="%$search%";
 $params[]=$search_param;
 $types.='s';
 }
 $where_clause=implode(' AND ',$where);
-$query="SELECT c.t_id,c.class_name, /* c.class_code, */ COUNT(DISTINCT u.user_id)as student_count FROM classes c LEFT JOIN user_details u ON c.t_id=u.class_id AND u.role_id=? WHERE $where_clause GROUP BY c.t_id ORDER BY c.class_name";
+$query="SELECT c.t_id,c.class_name,c.class_code,COUNT(DISTINCT u.user_id)as student_count FROM classes c LEFT JOIN user_details u ON c.t_id=u.class_id AND u.role_id=? WHERE $where_clause GROUP BY c.t_id ORDER BY c.class_name";
 $stmt=mysqli_prepare($conn,$query);
 $role=ROLE_STUDENT;
 $all_params=array_merge([$role],$params);

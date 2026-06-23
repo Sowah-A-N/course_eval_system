@@ -168,7 +168,7 @@ $role_class='role-'.strtolower(str_replace(' ','-',ROLE_NAMES[$user['role_id']]?
 <tr>
 <td><strong><?php echo htmlspecialchars($user['f_name'].' '.$user['l_name']);?></strong></td>
 <td><?php echo htmlspecialchars($user['email']);?></td>
-<td><?php echo htmlspecialchars($user['username']);?></td>
+<td><?php echo htmlspecialchars($user['username'] ?? 'N/A');?></td>
 <td><span class="role-badge <?php echo $role_class;?>"><?php echo htmlspecialchars(ROLE_NAMES[$user['role_id']]??'Unknown');?></span></td>
 <td><?php echo htmlspecialchars($user['dep_name']??'N/A');?></td>
 <td>

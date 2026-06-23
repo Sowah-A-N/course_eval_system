@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
     // ------------------------------------------------------------------
     $current = [];   // [lecturer_user_id][course_id] = assignment_id
     $stmt_cur = mysqli_prepare($conn,
-        'SELECT cl.id, cl.lecturer_user_id, cl.course_id
+        'SELECT cl.assignment_id, cl.lecturer_user_id, cl.course_id
            FROM course_lecturers cl
            JOIN courses c ON c.id = cl.course_id
           WHERE c.department_id = ?
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
     mysqli_stmt_execute($stmt_cur);
     $res_cur = mysqli_stmt_get_result($stmt_cur);
     while ($row = mysqli_fetch_assoc($res_cur)) {
-        $current[$row['lecturer_user_id']][$row['course_id']] = (int) $row['id'];
+        $current[$row['lecturer_user_id']][$row['course_id']] = (int) $row['assignment_id'];
     }
     mysqli_stmt_close($stmt_cur);
 
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
          VALUES (?, ?, ?, ?, NOW(), 1)');
 
     $stmt_del = mysqli_prepare($conn,
-        'DELETE FROM course_lecturers WHERE id = ?');
+        'DELETE FROM course_lecturers WHERE assignment_id = ?');
 
     $inserts = 0;
     $deletes = 0;

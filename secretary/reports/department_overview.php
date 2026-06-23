@@ -96,7 +96,7 @@ while ($row = mysqli_fetch_assoc($result)) $students_by_class[] = $row;
 mysqli_stmt_close($stmt);
 
 // Recent students (last 10)
-$query = "SELECT f_name, l_name, unique_id, date_created FROM user_details WHERE department_id=? AND role_id=? ORDER BY date_created DESC LIMIT 10";
+$query = "SELECT f_name, l_name, unique_id, created_at FROM user_details WHERE department_id=? AND role_id=? ORDER BY created_at DESC LIMIT 10";
 $stmt = mysqli_prepare($conn, $query);
 mysqli_stmt_bind_param($stmt, "ii", $department_id, $role);
 mysqli_stmt_execute($stmt);
@@ -200,7 +200,7 @@ require_once '../../includes/header.php';
                 <span class="data-label">
                     <?php echo htmlspecialchars($student['f_name'] . ' ' . $student['l_name']); ?>
                 </span>
-                <span class="data-value"><?php echo date('M d, Y', strtotime($student['date_created'])); ?></span>
+                <span class="data-value"><?php echo date('M d, Y', strtotime($student['created_at'])); ?></span>
             </div>
         <?php endforeach; ?>
     </div>

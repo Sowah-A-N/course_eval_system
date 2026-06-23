@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 // Check if assignment already exists
                 $query_check = "
-                    SELECT id FROM course_lecturers
+                    SELECT assignment_id FROM course_lecturers
                     WHERE course_id = ?
                     AND lecturer_user_id = ?
                     AND academic_year_id = ?
