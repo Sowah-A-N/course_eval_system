@@ -1,7 +1,6 @@
 <?php
 /**
  * Secretary — Bulk Student Import via CSV
- * Supports: template download, CSV preview, confirm import, results display.
  */
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
@@ -22,16 +21,15 @@ if ($_SESSION['role_id'] !== ROLE_SECRETARY) {
 $department_id = (int) $_SESSION['department_id'];
 
 /* -----------------------------------------------------------------------
- * Step 0 — Template CSV download
+ * Step 0 — Template download
  * --------------------------------------------------------------------- */
 if (isset($_GET['action']) && $_GET['action'] === 'template') {
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="student_import_template.csv"');
     header('Pragma: no-cache');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['first_name', 'last_name', 'email', 'student_id', 'level_id', 'class_id']);
-    // Example row
-    fputcsv($out, ['Jane', 'Doe', 'jane.doe@example.com', 'STU0001', '1', '2']);
+    fputcsv($out, ['first_name', 'last_name', 'email', 'level', 'class']);
+    fputcsv($out, ['Jane', 'Doe', 'jane.doe@example.com', '100', 'BIT28']);
     fclose($out);
     exit();
 }
@@ -40,54 +38,55 @@ if (isset($_GET['action']) && $_GET['action'] === 'template') {
  * Helpers
  * --------------------------------------------------------------------- */
 
-/** Return all valid level rows keyed by t_id */
-function get_levels(mysqli $conn): array {
-    $res = mysqli_query($conn, "SELECT t_id, level_name FROM level ORDER BY level_number");
+/** Map level_number (100,200,...) → ['id'=>t_id,'name'=>level_name] */
+function get_levels_by_number(mysqli $conn): array {
+    $res = mysqli_query($conn, "SELECT t_id, level_name, level_number FROM level ORDER BY level_number");
     $map = [];
     while ($row = mysqli_fetch_assoc($res)) {
-        $map[(int)$row['t_id']] = $row['level_name'];
+        $map[(int)$row['level_number']] = ['id' => (int)$row['t_id'], 'name' => $row['level_name']];
     }
     return $map;
 }
 
-/** Return all class rows for this department keyed by t_id */
-function get_dept_classes(mysqli $conn, int $dept_id): array {
-    $stmt = mysqli_prepare($conn, "SELECT t_id, class_name FROM classes WHERE department_id = ? ORDER BY class_name");
+/** Map UPPERCASE class_code → ['id'=>t_id,'name'=>class_name] for this department */
+function get_classes_by_code(mysqli $conn, int $dept_id): array {
+    $stmt = mysqli_prepare($conn,
+        "SELECT t_id, class_name, class_code FROM classes WHERE department_id = ? ORDER BY class_name");
     mysqli_stmt_bind_param($stmt, "i", $dept_id);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     $map = [];
     while ($row = mysqli_fetch_assoc($res)) {
-        $map[(int)$row['t_id']] = $row['class_name'];
+        $map[strtoupper($row['class_code'])] = ['id' => (int)$row['t_id'], 'name' => $row['class_name']];
     }
     mysqli_stmt_close($stmt);
     return $map;
 }
 
-/** Check whether email already exists in user_details. Returns bool. */
 function email_exists(mysqli $conn, string $email): bool {
     $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE email = ? LIMIT 1");
     mysqli_stmt_bind_param($stmt, "s", $email);
     mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $found = $res->num_rows > 0;
+    $found = mysqli_stmt_get_result($stmt)->num_rows > 0;
     mysqli_stmt_close($stmt);
     return $found;
 }
 
-/** Check whether student_id (unique_id) already exists in user_details. Returns bool. */
-function student_id_exists(mysqli $conn, string $unique_id): bool {
-    $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE unique_id = ? LIMIT 1");
-    mysqli_stmt_bind_param($stmt, "s", $unique_id);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $found = $res->num_rows > 0;
-    mysqli_stmt_close($stmt);
-    return $found;
+/** Generate a random unique_id that doesn't already exist in user_details */
+function generate_unique_student_id(mysqli $conn): string {
+    do {
+        $uid = strtoupper(bin2hex(random_bytes(5))); // 10-char hex, e.g. A3F2C91B4E
+        $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE unique_id = ? LIMIT 1");
+        mysqli_stmt_bind_param($stmt, "s", $uid);
+        mysqli_stmt_execute($stmt);
+        $exists = mysqli_stmt_get_result($stmt)->num_rows > 0;
+        mysqli_stmt_close($stmt);
+    } while ($exists);
+    return $uid;
 }
 
 /* -----------------------------------------------------------------------
- * Step 3 — Confirm import (POST action=confirm)
+ * Step 3 — Confirm import
  * --------------------------------------------------------------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm') {
     if (!validate_csrf_token()) {
@@ -113,11 +112,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         $stmt_ins = mysqli_prepare($conn,
             "INSERT INTO user_details
              (username, password, email, f_name, l_name, unique_id, role_id,
-              department_id, level_id, class_id, is_active, force_password_change, date_created)
+              department_id, level_id, class_id, is_active, force_password_change, created_at)
              VALUES (?,?,?,?,?,?,?,?,?,?,1,1,NOW())"
         );
 
         foreach ($preview as $row) {
+            $unique_id     = generate_unique_student_id($conn);
             $username      = ces_derive_username($conn, $row['f_name'], $row['l_name']);
             $temp_password = ces_generate_temp_password();
             $password_hash = password_hash($temp_password, PASSWORD_DEFAULT);
@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
                 $row['email'],
                 $row['f_name'],
                 $row['l_name'],
-                $row['student_id'],
+                $unique_id,
                 $role_student,
                 $department_id,
                 $row['level_id'],
@@ -140,17 +140,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
             }
 
             $credentials[] = [
-                'name'       => $row['f_name'] . ' ' . $row['l_name'],
-                'username'   => $username,
-                'password'   => $temp_password,
-                'email'      => $row['email'],
-                'student_id' => $row['student_id'],
+                'name'     => $row['f_name'] . ' ' . $row['l_name'],
+                'email'    => $row['email'],
+                'username' => $username,
+                'password' => $temp_password,
             ];
         }
 
         mysqli_stmt_close($stmt_ins);
         mysqli_commit($conn);
-
         unset($_SESSION['import_preview']);
         $_SESSION['import_credentials'] = $credentials;
         header("Location: import.php?done=1");
@@ -166,12 +164,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 }
 
 /* -----------------------------------------------------------------------
- * Step 2 — Parse & preview CSV (POST with file, no action=confirm)
+ * Step 2 — Parse & preview CSV
  * --------------------------------------------------------------------- */
-$preview_rows  = [];  // ['data'=>[], 'valid'=>bool, 'errors'=>[]]
-$valid_count   = 0;
-$error_count   = 0;
-$parse_errors  = [];  // file-level errors
+$preview_rows = [];
+$valid_count  = 0;
+$error_count  = 0;
+$parse_errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confirm') {
     if (!validate_csrf_token()) {
@@ -180,101 +178,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
         $parse_errors[] = 'Please select a valid CSV file to upload.';
     } else {
         $file = $_FILES['csv_file']['tmp_name'];
+        $ext  = strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION));
         $mime = mime_content_type($file);
-        // Accept text/plain too — some OS report CSV as plain text
         $allowed_mime = ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'];
-        if (!in_array($mime, $allowed_mime, true) && strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION)) !== 'csv') {
+        if (!in_array($mime, $allowed_mime, true) && $ext !== 'csv') {
             $parse_errors[] = 'File must be a CSV file.';
         } else {
-            $levels  = get_levels($conn);
-            $classes = get_dept_classes($conn, $department_id);
+            $level_map = get_levels_by_number($conn);
+            $class_map = get_classes_by_code($conn, $department_id);
 
             $handle = fopen($file, 'r');
-            $header = fgetcsv($handle); // skip header row
-
-            // Normalise header to lowercase for detection
+            $header = fgetcsv($handle);
             if ($header !== false) {
                 $header_lower = array_map('strtolower', array_map('trim', $header));
-                $expected = ['first_name', 'last_name', 'email', 'student_id', 'level_id', 'class_id'];
-                $missing = array_diff($expected, $header_lower);
-                if (!empty($missing)) {
-                    $parse_errors[] = 'CSV is missing required columns: ' . implode(', ', $missing);
-                }
+                $missing = array_diff(['first_name', 'last_name', 'email', 'level', 'class'], $header_lower);
+                if (!empty($missing)) $parse_errors[] = 'CSV is missing required columns: ' . implode(', ', $missing);
             } else {
-                $parse_errors[] = 'Could not read the CSV file. Make sure it is not empty.';
+                $parse_errors[] = 'Could not read the CSV file.';
             }
 
             if (empty($parse_errors)) {
-                // Track emails / student_ids seen in this upload to detect intra-file duplicates
                 $seen_emails = [];
-                $seen_ids    = [];
                 $row_num     = 1;
 
                 while (($csv_row = fgetcsv($handle)) !== false) {
                     $row_num++;
-                    // Skip completely blank rows
                     if (count(array_filter(array_map('trim', $csv_row))) === 0) continue;
 
-                    // Map by position (template order)
-                    [$f_name, $l_name, $email, $student_id, $level_id_raw, $class_id_raw] =
-                        array_pad(array_map('trim', $csv_row), 6, '');
+                    [$f_name, $l_name, $email, $level_raw, $class_raw] =
+                        array_pad(array_map('trim', $csv_row), 5, '');
 
                     $row_errors = [];
 
-                    if ($f_name === '')  $row_errors[] = 'First name is required';
-                    if ($l_name === '')  $row_errors[] = 'Last name is required';
+                    if ($f_name === '') $row_errors[] = 'First name is required';
+                    if ($l_name === '') $row_errors[] = 'Last name is required';
 
+                    $email = strtolower($email);
                     if ($email === '') {
                         $row_errors[] = 'Email is required';
                     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                         $row_errors[] = 'Invalid email format';
-                    } elseif (isset($seen_emails[strtolower($email)])) {
+                    } elseif (isset($seen_emails[$email])) {
                         $row_errors[] = 'Duplicate email in this file';
                     } elseif (email_exists($conn, $email)) {
                         $row_errors[] = 'Email already registered in the system';
                     }
 
-                    if ($student_id === '') {
-                        $row_errors[] = 'Student ID is required';
-                    } elseif (isset($seen_ids[strtolower($student_id)])) {
-                        $row_errors[] = 'Duplicate Student ID in this file';
-                    } elseif (student_id_exists($conn, $student_id)) {
-                        $row_errors[] = 'Student ID already registered in the system';
+                    // Level: expect 100, 200, 300, 400 etc.
+                    $level_num = filter_var($level_raw, FILTER_VALIDATE_INT);
+                    $level_id  = null;
+                    $level_name = '';
+                    if ($level_num === false || $level_num <= 0) {
+                        $row_errors[] = 'Level must be a number like 100, 200, 300 or 400';
+                    } elseif (!isset($level_map[$level_num])) {
+                        $known = implode(', ', array_keys($level_map));
+                        $row_errors[] = "Level $level_num not recognised. Valid levels: $known";
+                    } else {
+                        $level_id   = $level_map[$level_num]['id'];
+                        $level_name = $level_map[$level_num]['name'];
                     }
 
-                    $level_id = filter_var($level_id_raw, FILTER_VALIDATE_INT);
-                    if ($level_id === false || $level_id <= 0) {
-                        $row_errors[] = 'level_id must be a positive integer';
-                    } elseif (!isset($levels[$level_id])) {
-                        $row_errors[] = "level_id {$level_id} does not exist";
-                    }
-
-                    $class_id = filter_var($class_id_raw, FILTER_VALIDATE_INT);
-                    if ($class_id === false || $class_id <= 0) {
-                        $row_errors[] = 'class_id must be a positive integer';
-                    } elseif (!isset($classes[$class_id])) {
-                        $row_errors[] = "class_id {$class_id} does not exist in your department";
+                    // Class: expect code like BIT28
+                    $class_code_upper = strtoupper($class_raw);
+                    $class_id   = null;
+                    $class_name = '';
+                    if ($class_raw === '') {
+                        $row_errors[] = 'Class is required (e.g. BIT28)';
+                    } elseif (!isset($class_map[$class_code_upper])) {
+                        $row_errors[] = "Class \"$class_raw\" not found in your department";
+                    } else {
+                        $class_id   = $class_map[$class_code_upper]['id'];
+                        $class_name = $class_map[$class_code_upper]['name'];
                     }
 
                     $is_valid = empty($row_errors);
-                    if ($is_valid) {
-                        $valid_count++;
-                        $seen_emails[strtolower($email)]    = true;
-                        $seen_ids[strtolower($student_id)]  = true;
-                    } else {
-                        $error_count++;
-                    }
+                    if ($is_valid) { $valid_count++; $seen_emails[$email] = true; }
+                    else $error_count++;
 
                     $preview_rows[] = [
                         'row'        => $row_num,
                         'f_name'     => $f_name,
                         'l_name'     => $l_name,
                         'email'      => $email,
-                        'student_id' => $student_id,
-                        'level_id'   => $level_id !== false ? $level_id : 0,
-                        'level_name' => ($level_id && isset($levels[$level_id])) ? $levels[$level_id] : $level_id_raw,
-                        'class_id'   => $class_id !== false ? $class_id : 0,
-                        'class_name' => ($class_id && isset($classes[$class_id])) ? $classes[$class_id] : $class_id_raw,
+                        'level_raw'  => $level_raw,
+                        'level_name' => $level_name ?: $level_raw,
+                        'class_raw'  => $class_raw,
+                        'class_name' => $class_name ?: $class_raw,
+                        'level_id'   => $level_id,
+                        'class_id'   => $class_id,
                         'valid'      => $is_valid,
                         'errors'     => $row_errors,
                     ];
@@ -284,15 +275,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                 if (empty($preview_rows)) {
                     $parse_errors[] = 'The CSV file contains no data rows.';
                 } else {
-                    // Store only valid rows in session for the confirm step
                     $_SESSION['import_preview'] = array_values(array_filter(
                         array_map(fn($r) => $r['valid'] ? [
-                            'f_name'     => $r['f_name'],
-                            'l_name'     => $r['l_name'],
-                            'email'      => $r['email'],
-                            'student_id' => $r['student_id'],
-                            'level_id'   => $r['level_id'],
-                            'class_id'   => $r['class_id'],
+                            'f_name'   => $r['f_name'],
+                            'l_name'   => $r['l_name'],
+                            'email'    => $r['email'],
+                            'level_id' => $r['level_id'],
+                            'class_id' => $r['class_id'],
                         ] : null, $preview_rows)
                     ));
                 }
@@ -307,7 +296,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
  * Step 4 — Results (?done=1)
  * --------------------------------------------------------------------- */
 $import_credentials = null;
-if (isset($_GET['done']) && isset($_SESSION['import_credentials'])) {
+if (isset($_GET['done']) && !empty($_SESSION['import_credentials'])) {
     $import_credentials = $_SESSION['import_credentials'];
     unset($_SESSION['import_credentials']);
 }
@@ -317,15 +306,10 @@ require_once '../../includes/header.php';
 ?>
 
 <style>
-/* ── Layout ── */
 .import-container{max-width:960px;margin:0 auto}
-
-/* ── Upload card ── */
 .card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);padding:28px;margin-bottom:24px}
 .card-title{font-size:18px;font-weight:600;color:#333;margin:0 0 6px}
 .card-subtitle{font-size:13px;color:#666;margin:0 0 20px}
-
-/* ── Buttons ── */
 .btn{padding:10px 22px;border:none;border-radius:5px;font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;display:inline-block;margin-right:8px;margin-bottom:6px;line-height:1.4}
 .btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
 .btn-success{background:#28a745;color:#fff}
@@ -333,31 +317,21 @@ require_once '../../includes/header.php';
 .btn-outline{background:#fff;border:2px solid #667eea;color:#667eea}
 .btn-sm{padding:6px 14px;font-size:13px}
 .btn:hover{opacity:.9}
-
-/* ── Form elements ── */
 .form-group{margin-bottom:18px}
 .form-label{display:block;font-size:14px;font-weight:500;margin-bottom:5px;color:#444}
 .form-input{width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:5px;font-size:14px;box-sizing:border-box}
 .form-input:focus{outline:none;border-color:#667eea}
-
-/* ── Alerts ── */
 .alert{padding:14px 18px;border-radius:7px;margin-bottom:20px;font-size:14px}
 .alert-error{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24}
 .alert-info{background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460}
 .alert ul{margin:8px 0 0 18px;padding:0}
-
-/* ── Template hint ── */
 .template-hint{background:#f8f9fa;border:1px dashed #ced4da;border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#555}
 .template-hint code{background:#e9ecef;padding:2px 6px;border-radius:3px;font-family:monospace}
-
-/* ── Stats bar ── */
 .stats-bar{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}
 .stat-chip{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600}
 .stat-valid{background:#d4edda;color:#155724}
 .stat-error{background:#f8d7da;color:#721c24}
 .stat-total{background:#cce5ff;color:#004085}
-
-/* ── Preview table ── */
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{background:#f1f3f5;padding:10px 12px;text-align:left;font-weight:600;color:#555;white-space:nowrap;border-bottom:2px solid #dee2e6}
@@ -369,8 +343,6 @@ tr.row-error{border-left:3px solid #dc3545}
 .badge-error{background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
 .err-list{margin:4px 0 0 0;padding:0 0 0 14px;color:#dc3545;font-size:12px}
 .err-list li{margin-bottom:2px}
-
-/* ── Credentials card ── */
 .creds-card{background:#f0fdf4;border:2px solid #86efac;border-radius:10px;padding:26px;margin-bottom:24px}
 .creds-card h2{color:#166534;margin:0 0 6px;font-size:20px}
 .creds-card p{color:#166534;margin:0 0 16px;font-size:14px}
@@ -384,53 +356,36 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <div class="import-container">
 
-<?php /* ── Flash messages ── */
-if (!empty($_SESSION['flash_message'])): ?>
+<?php if (!empty($_SESSION['flash_message'])): ?>
 <div class="alert alert-<?php echo $_SESSION['flash_type'] === 'error' ? 'error' : 'info'; ?>">
     <?php echo htmlspecialchars($_SESSION['flash_message']); ?>
 </div>
-<?php
-    unset($_SESSION['flash_message'], $_SESSION['flash_type']);
-endif;
-?>
+<?php unset($_SESSION['flash_message'], $_SESSION['flash_type']); endif; ?>
 
-<?php /* ======================================================
-       STEP 4 — Results
-       ====================================================== */
-if ($import_credentials !== null): ?>
+<?php if ($import_credentials !== null): ?>
 
 <div class="creds-card">
     <h2>Import Successful</h2>
-    <p><?php echo count($import_credentials); ?> student account(s) were created. Share the credentials below. Students will be prompted to change their password on first login.</p>
+    <p><?php echo count($import_credentials); ?> student account(s) created. Share credentials below. Students must change their password on first login.</p>
     <p class="warn-note">These credentials are shown <strong>once only</strong>. Download or copy them now.</p>
-
     <div class="table-wrap" id="creds-table-wrap">
         <table id="creds-table">
             <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Student ID</th>
-                    <th>Email</th>
-                    <th>Username</th>
-                    <th>Temp Password</th>
-                </tr>
+                <tr><th>#</th><th>Name</th><th>Email</th><th>Username</th><th>Temp Password</th></tr>
             </thead>
             <tbody>
-                <?php foreach ($import_credentials as $i => $cred): ?>
+                <?php foreach ($import_credentials as $i => $c): ?>
                 <tr>
                     <td><?php echo $i + 1; ?></td>
-                    <td><?php echo htmlspecialchars($cred['name']); ?></td>
-                    <td><?php echo htmlspecialchars($cred['student_id']); ?></td>
-                    <td><?php echo htmlspecialchars($cred['email']); ?></td>
-                    <td><code><?php echo htmlspecialchars($cred['username']); ?></code></td>
-                    <td><code><?php echo htmlspecialchars($cred['password']); ?></code></td>
+                    <td><?php echo htmlspecialchars($c['name']); ?></td>
+                    <td><?php echo htmlspecialchars($c['email']); ?></td>
+                    <td><code><?php echo htmlspecialchars($c['username']); ?></code></td>
+                    <td><code><?php echo htmlspecialchars($c['password']); ?></code></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
     </div>
-
     <br>
     <button class="btn btn-success" onclick="downloadCredsCsv()">Download Credentials CSV</button>
     <a href="import.php" class="btn btn-primary">Import More</a>
@@ -439,67 +394,46 @@ if ($import_credentials !== null): ?>
 
 <script>
 (function(){
-    // Embed credentials data for JS CSV export
-    var credsData = <?php echo json_encode(array_map(fn($c) => [
+    var data = <?php echo json_encode(array_map(fn($c) => [
         htmlspecialchars($c['name'],     ENT_QUOTES),
-        htmlspecialchars($c['student_id'], ENT_QUOTES),
         htmlspecialchars($c['email'],    ENT_QUOTES),
         htmlspecialchars($c['username'], ENT_QUOTES),
         htmlspecialchars($c['password'], ENT_QUOTES),
     ], $import_credentials), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>;
-
     window.downloadCredsCsv = function(){
-        var rows = [['Name','Student ID','Email','Username','Temp Password']].concat(credsData);
+        var rows = [['Name','Email','Username','Temp Password']].concat(data);
         var csv  = rows.map(function(r){
-            return r.map(function(v){ return '"' + String(v).replace(/"/g,'""') + '"'; }).join(',');
+            return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
         }).join('\r\n');
-        var blob = new Blob([csv], {type:'text/csv'});
+        var blob = new Blob([csv],{type:'text/csv'});
         var url  = URL.createObjectURL(blob);
         var a    = document.createElement('a');
-        a.href     = url;
-        a.download = 'imported_student_credentials.csv';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1000);
+        a.href=url; a.download='imported_student_credentials.csv';
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },1000);
     };
 }());
 </script>
 
-<?php /* ======================================================
-       STEP 2 — Preview table (after CSV parse)
-       ====================================================== */
-elseif (!empty($preview_rows)): ?>
+<?php elseif (!empty($preview_rows)): ?>
 
 <?php if (!empty($parse_errors)): ?>
-<div class="alert alert-error">
-    <strong>File Error:</strong>
-    <ul><?php foreach ($parse_errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul>
-</div>
+<div class="alert alert-error"><strong>File Error:</strong>
+<ul><?php foreach ($parse_errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div>
 <?php endif; ?>
 
 <div class="card">
     <p class="card-title">Import Preview</p>
-    <p class="card-subtitle">Review the parsed rows before confirming. Only valid rows will be imported.</p>
-
+    <p class="card-subtitle">Review before confirming. Only valid rows will be imported. Student IDs are assigned automatically.</p>
     <div class="stats-bar">
         <span class="stat-chip stat-total">Total: <?php echo count($preview_rows); ?></span>
         <span class="stat-chip stat-valid">Valid: <?php echo $valid_count; ?></span>
         <span class="stat-chip stat-error">Errors: <?php echo $error_count; ?></span>
     </div>
-
     <div class="table-wrap">
         <table>
             <thead>
-                <tr>
-                    <th>Row</th>
-                    <th>First Name</th>
-                    <th>Last Name</th>
-                    <th>Email</th>
-                    <th>Student ID</th>
-                    <th>Level</th>
-                    <th>Class</th>
-                    <th>Status</th>
-                </tr>
+                <tr><th>Row</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Level</th><th>Class</th><th>Status</th></tr>
             </thead>
             <tbody>
                 <?php foreach ($preview_rows as $pr): ?>
@@ -508,7 +442,6 @@ elseif (!empty($preview_rows)): ?>
                     <td><?php echo htmlspecialchars($pr['f_name']); ?></td>
                     <td><?php echo htmlspecialchars($pr['l_name']); ?></td>
                     <td><?php echo htmlspecialchars($pr['email']); ?></td>
-                    <td><?php echo htmlspecialchars($pr['student_id']); ?></td>
                     <td><?php echo htmlspecialchars($pr['level_name']); ?></td>
                     <td><?php echo htmlspecialchars($pr['class_name']); ?></td>
                     <td>
@@ -539,51 +472,61 @@ elseif (!empty($preview_rows)): ?>
         </button>
         <a href="import.php" class="btn btn-secondary">Cancel</a>
         <?php if ($error_count > 0): ?>
-            <p style="margin-top:10px;font-size:13px;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:5px;display:inline-block">
-                <?php echo $error_count; ?> row(s) with errors will be skipped.
-            </p>
+        <p style="margin-top:10px;font-size:13px;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:5px;display:inline-block">
+            <?php echo $error_count; ?> row(s) with errors will be skipped.
+        </p>
         <?php endif; ?>
     </form>
     <?php else: ?>
-    <div class="alert alert-error" style="margin-top:16px">
-        No valid rows found. Please fix the errors in your CSV and try again.
-    </div>
+    <div class="alert alert-error" style="margin-top:16px">No valid rows found. Please fix the errors and try again.</div>
     <a href="import.php" class="btn btn-primary" style="margin-top:8px">Upload Again</a>
     <?php endif; ?>
 </div>
 
-<?php /* ======================================================
-       STEP 1 — Upload form (GET, or POST with file-level errors)
-       ====================================================== */
-else: ?>
+<?php else: ?>
 
 <?php if (!empty($parse_errors)): ?>
-<div class="alert alert-error">
-    <strong>Error:</strong>
-    <ul><?php foreach ($parse_errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul>
-</div>
+<div class="alert alert-error"><strong>Error:</strong>
+<ul><?php foreach ($parse_errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div>
 <?php endif; ?>
 
 <div class="card">
     <p class="card-title">Upload CSV File</p>
-    <p class="card-subtitle">Import multiple students by uploading a correctly formatted CSV file.</p>
+    <p class="card-subtitle">Import multiple students by uploading a correctly formatted CSV file. Student IDs, usernames, and passwords are assigned automatically.</p>
 
     <div class="template-hint">
         <strong>Required columns (in order):</strong>
         <code>first_name</code>, <code>last_name</code>, <code>email</code>,
-        <code>student_id</code>, <code>level_id</code>, <code>class_id</code>
+        <code>level</code>, <code>class</code>
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
-            <li><code>level_id</code> must match a valid Level ID in the system.</li>
-            <li><code>class_id</code> must match a class that belongs to your department.</li>
-            <li>Emails and Student IDs must be unique (not already registered).</li>
-            <li>Usernames and temporary passwords are auto-generated.</li>
-            <li>All imported students will be required to change their password on first login.</li>
+            <li><code>level</code> — enter the level as a number: <strong>100, 200, 300</strong> or <strong>400</strong></li>
+            <li><code>class</code> — enter the class code exactly as shown, e.g. <strong>BIT28</strong></li>
+            <li>Each email must be unique and not already registered.</li>
+            <li>Student IDs, usernames, and temporary passwords are assigned automatically.</li>
         </ul>
         <br>
         <a href="import.php?action=template" class="btn btn-outline btn-sm">Download CSV Template</a>
     </div>
+
+    <!-- Class reference -->
+    <?php
+    $class_map_display = get_classes_by_code($conn, $department_id);
+    if (!empty($class_map_display)):
+    ?>
+    <details style="margin-bottom:18px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#667eea">View available classes in your department</summary>
+        <table style="margin-top:8px;width:auto;min-width:260px">
+            <thead><tr><th>Class Code</th><th>Class Name</th></tr></thead>
+            <tbody>
+            <?php foreach ($class_map_display as $code => $info): ?>
+            <tr><td><?php echo htmlspecialchars($code); ?></td><td><?php echo htmlspecialchars($info['name']); ?></td></tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </details>
+    <?php endif; ?>
 
     <form method="POST" enctype="multipart/form-data">
         <?php csrf_token_input(); ?>
@@ -598,6 +541,6 @@ else: ?>
 
 <?php endif; ?>
 
-</div><!-- /.import-container -->
+</div>
 
 <?php require_once '../../includes/footer.php'; ?>
