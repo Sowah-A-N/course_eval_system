@@ -374,7 +374,9 @@ function validate_csrf_ajax()
 function is_csrf_token_expired($max_age = 3600)
 {
     if (!isset($_SESSION[CSRF_TOKEN_NAME . '_time'])) {
-        return true; // No timestamp means token was not properly generated; treat as expired
+        // Timestamp missing (legacy session) — stamp it now so expiry works going forward
+        $_SESSION[CSRF_TOKEN_NAME . '_time'] = time();
+        return false;
     }
 
     $token_age = time() - $_SESSION[CSRF_TOKEN_NAME . '_time'];
