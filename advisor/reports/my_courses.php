@@ -29,7 +29,8 @@ $stmt_periods=mysqli_prepare($conn,
 mysqli_stmt_bind_param($stmt_periods,"i",$lecturer_id);
 mysqli_stmt_execute($stmt_periods);
 $periods=[];
-while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_periods)))$periods[]=$r;
+$res_periods=mysqli_stmt_get_result($stmt_periods);
+while($r=mysqli_fetch_assoc($res_periods))$periods[]=$r;
 mysqli_stmt_close($stmt_periods);
 
 // Selected period — default to active
@@ -54,7 +55,8 @@ if($sel_year && $sel_sem){
          ORDER BY c.course_code");
     mysqli_stmt_bind_param($stmt_c,"iii",$lecturer_id,$sel_year,$sel_sem);
     mysqli_stmt_execute($stmt_c);
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_c))){
+    $res_c=mysqli_stmt_get_result($stmt_c);
+    while($r=mysqli_fetch_assoc($res_c)){
         $r['avg_rating'] = ($r['response_count']>=MIN_RESPONSE_COUNT&&$r['avg_rating'])
             ? round($r['avg_rating'],2) : null;
         $r['completion'] = $r['total_tokens']>0
@@ -76,8 +78,9 @@ if($sel_year && $sel_sem){
          ORDER BY eq.display_order");
     mysqli_stmt_bind_param($stmt_q,"iii",$lecturer_id,$sel_year,$sel_sem);
     mysqli_stmt_execute($stmt_q);
+    $res_q=mysqli_stmt_get_result($stmt_q);
     $questions=[];
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_q))){
+    while($r=mysqli_fetch_assoc($res_q)){
         $r['avg']=round($r['avg'],2);
         $questions[]=$r;
     }

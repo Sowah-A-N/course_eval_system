@@ -58,16 +58,18 @@ function generate_tokens(mysqli $conn, int $dept_id, int $level_id, int $year_id
     $stmt_s = mysqli_prepare($conn,"SELECT DISTINCT u.user_id FROM user_details u WHERE u.department_id=? AND u.level_id=? AND u.role_id=? AND u.is_active=1");
     mysqli_stmt_bind_param($stmt_s,"iii",$dept_id,$level_id,$role);
     mysqli_stmt_execute($stmt_s);
+    $res_s=mysqli_stmt_get_result($stmt_s);
     $students=[];
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_s)))$students[]=$r['user_id'];
+    while($r=mysqli_fetch_assoc($res_s))$students[]=$r['user_id'];
     mysqli_stmt_close($stmt_s);
     if(empty($students))return 0;
 
     $stmt_c = mysqli_prepare($conn,"SELECT id FROM courses WHERE department_id=? AND level_id=?");
     mysqli_stmt_bind_param($stmt_c,"ii",$dept_id,$level_id);
     mysqli_stmt_execute($stmt_c);
+    $res_c=mysqli_stmt_get_result($stmt_c);
     $courses=[];
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_c)))$courses[]=$r['id'];
+    while($r=mysqli_fetch_assoc($res_c))$courses[]=$r['id'];
     mysqli_stmt_close($stmt_c);
     if(empty($courses))return 0;
 

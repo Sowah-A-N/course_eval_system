@@ -19,7 +19,8 @@ if($dept>0){
     $stmt=mysqli_prepare($conn,"SELECT id,course_code,name FROM courses WHERE (course_code LIKE ? OR name LIKE ?) AND department_id=? LIMIT 6");
     mysqli_stmt_bind_param($stmt,"ssi",$like,$like,$dept);
     mysqli_stmt_execute($stmt);
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))){
+    $res_courses=mysqli_stmt_get_result($stmt);
+    while($r=mysqli_fetch_assoc($res_courses)){
         $url = match($role){
             ROLE_ADMIN   => 'admin/courses/list.php',
             ROLE_HOD     => 'hod/courses/list.php',
@@ -44,7 +45,8 @@ if(in_array($role,[ROLE_ADMIN,ROLE_SECRETARY,ROLE_HOD])){
         mysqli_stmt_bind_param($stmt,"isssi",$role_s,$like,$like,$like,$dept);
     }
     mysqli_stmt_execute($stmt);
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))){
+    $res_students=mysqli_stmt_get_result($stmt);
+    while($r=mysqli_fetch_assoc($res_students)){
         $url = match($role){
             ROLE_ADMIN     => 'admin/users/list.php',
             ROLE_SECRETARY => 'secretary/students/list.php',
@@ -69,7 +71,8 @@ if(in_array($role,[ROLE_ADMIN,ROLE_HOD])){
         mysqli_stmt_bind_param($stmt,"isssi",$role_a,$like,$like,$like,$dept);
     }
     mysqli_stmt_execute($stmt);
-    while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))){
+    $res_lecturers=mysqli_stmt_get_result($stmt);
+    while($r=mysqli_fetch_assoc($res_lecturers)){
         $url = ($role===ROLE_ADMIN) ? 'admin/users/list.php' : 'hod/lecturers/list.php';
         $results[]=['type'=>'Lecturer','label'=>htmlspecialchars($r['f_name'].' '.$r['l_name']),'sub'=>'','url'=>$url];
     }

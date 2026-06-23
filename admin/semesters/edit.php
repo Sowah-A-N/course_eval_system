@@ -59,14 +59,16 @@ if($semester['is_active']==0 && $is_active==1){
             "SELECT DISTINCT user_id FROM user_details WHERE department_id=? AND level_id=? AND role_id=? AND is_active=1");
         mysqli_stmt_bind_param($stmt_s,"iii",$did,$lid,$role);
         mysqli_stmt_execute($stmt_s);
+        $res_s=mysqli_stmt_get_result($stmt_s);
         $students=[];
-        while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_s)))$students[]=$r['user_id'];
+        while($r=mysqli_fetch_assoc($res_s))$students[]=$r['user_id'];
         mysqli_stmt_close($stmt_s);
         $stmt_c=mysqli_prepare($conn,"SELECT id FROM courses WHERE department_id=? AND level_id=?");
         mysqli_stmt_bind_param($stmt_c,"ii",$did,$lid);
         mysqli_stmt_execute($stmt_c);
+        $res_c=mysqli_stmt_get_result($stmt_c);
         $courses=[];
-        while($r=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_c)))$courses[]=$r['id'];
+        while($r=mysqli_fetch_assoc($res_c))$courses[]=$r['id'];
         mysqli_stmt_close($stmt_c);
         foreach($students as $sid){
             foreach($courses as $cid){
