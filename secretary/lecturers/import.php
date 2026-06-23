@@ -1,0 +1,403 @@
+<?php
+/**
+ * Secretary — Bulk Lecturer Import via CSV
+ */
+require_once '../../config/database.php';
+require_once '../../config/constants.php';
+require_once '../../includes/session.php';
+require_once '../../includes/csrf.php';
+require_once '../../includes/user_helpers.php';
+
+start_secure_session();
+check_login();
+
+if ($_SESSION['role_id'] !== ROLE_SECRETARY) {
+    $_SESSION['flash_message'] = 'Access denied.';
+    $_SESSION['flash_type']    = 'error';
+    header("Location: ../../login.php");
+    exit();
+}
+
+$department_id = (int) $_SESSION['department_id'];
+
+/* -----------------------------------------------------------------------
+ * Step 0 — Template download
+ * --------------------------------------------------------------------- */
+if (isset($_GET['action']) && $_GET['action'] === 'template') {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="lecturer_import_template.csv"');
+    header('Pragma: no-cache');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['first_name', 'last_name', 'email']);
+    fputcsv($out, ['John', 'Doe', 'john.doe@example.com']);
+    fclose($out);
+    exit();
+}
+
+/* -----------------------------------------------------------------------
+ * Helpers
+ * --------------------------------------------------------------------- */
+function email_exists_lec(mysqli $conn, string $email): bool {
+    $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE email=? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, "s", $email);
+    mysqli_stmt_execute($stmt);
+    $found = mysqli_stmt_get_result($stmt)->num_rows > 0;
+    mysqli_stmt_close($stmt);
+    return $found;
+}
+
+/* -----------------------------------------------------------------------
+ * Step 3 — Confirm import
+ * --------------------------------------------------------------------- */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm') {
+    if (!validate_csrf_token()) {
+        $_SESSION['flash_message'] = 'Invalid security token.';
+        $_SESSION['flash_type']    = 'error';
+        header("Location: import.php");
+        exit();
+    }
+
+    $preview = $_SESSION['import_preview_lecturers'] ?? [];
+    if (empty($preview)) {
+        $_SESSION['flash_message'] = 'No import data found. Please upload a CSV first.';
+        $_SESSION['flash_type']    = 'error';
+        header("Location: import.php");
+        exit();
+    }
+
+    mysqli_begin_transaction($conn);
+    try {
+        $stmt_ins = mysqli_prepare($conn,
+            "INSERT INTO user_details (role_id, f_name, l_name, email, username, password, department_id, is_active, force_password_change, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, NOW())");
+
+        $credentials = [];
+        foreach ($preview as $row) {
+            $temp_pass = ces_generate_temp_password();
+            $username  = ces_derive_username($conn, $row['first_name'], $row['last_name']);
+            $hashed    = password_hash($temp_pass, PASSWORD_DEFAULT);
+            $role_id   = ROLE_ADVISOR;
+
+            mysqli_stmt_bind_param($stmt_ins, "issssi",
+                $role_id, $row['first_name'], $row['last_name'],
+                $row['email'], $username, $hashed, $department_id);
+
+            if (!mysqli_stmt_execute($stmt_ins)) {
+                throw new RuntimeException("DB insert failed for {$row['email']}: " . mysqli_stmt_error($stmt_ins));
+            }
+            $credentials[] = [
+                'name'     => $row['first_name'] . ' ' . $row['last_name'],
+                'email'    => $row['email'],
+                'username' => $username,
+                'password' => $temp_pass,
+            ];
+        }
+
+        mysqli_stmt_close($stmt_ins);
+        mysqli_commit($conn);
+        unset($_SESSION['import_preview_lecturers']);
+
+        $_SESSION['lecturer_import_credentials'] = $credentials;
+        header("Location: import.php?done=1");
+        exit();
+
+    } catch (Throwable $e) {
+        mysqli_rollback($conn);
+        $_SESSION['flash_message'] = 'Import failed: ' . htmlspecialchars($e->getMessage());
+        $_SESSION['flash_type']    = 'error';
+        header("Location: import.php");
+        exit();
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * Step 2 — Parse & preview CSV
+ * --------------------------------------------------------------------- */
+$preview_rows = [];
+$valid_count  = 0;
+$error_count  = 0;
+$parse_errors = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confirm') {
+    if (!validate_csrf_token()) {
+        $parse_errors[] = 'Invalid security token.';
+    } elseif (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+        $parse_errors[] = 'Please select a valid CSV file to upload.';
+    } else {
+        $file = $_FILES['csv_file']['tmp_name'];
+        $ext  = strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION));
+        $mime = mime_content_type($file);
+        $allowed_mime = ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'];
+        if (!in_array($mime, $allowed_mime, true) && $ext !== 'csv') {
+            $parse_errors[] = 'File must be a CSV file.';
+        } else {
+            $handle = fopen($file, 'r');
+            $header = fgetcsv($handle);
+            if ($header !== false) {
+                $header_lower = array_map('strtolower', array_map('trim', $header));
+                $missing = array_diff(['first_name', 'last_name', 'email'], $header_lower);
+                if (!empty($missing)) $parse_errors[] = 'CSV missing columns: ' . implode(', ', $missing);
+            } else {
+                $parse_errors[] = 'Could not read the CSV file.';
+            }
+
+            if (empty($parse_errors)) {
+                $seen_emails = [];
+                $row_num = 1;
+                while (($csv_row = fgetcsv($handle)) !== false) {
+                    $row_num++;
+                    if (count(array_filter(array_map('trim', $csv_row))) === 0) continue;
+                    [$first_name, $last_name, $email] = array_pad(array_map('trim', $csv_row), 3, '');
+
+                    $row_errors = [];
+                    if ($first_name === '') $row_errors[] = 'First name is required';
+                    if ($last_name === '')  $row_errors[] = 'Last name is required';
+
+                    $email = strtolower($email);
+                    if ($email === '') {
+                        $row_errors[] = 'Email is required';
+                    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $row_errors[] = 'Invalid email format';
+                    } elseif (isset($seen_emails[$email])) {
+                        $row_errors[] = 'Duplicate email in this file';
+                    } elseif (email_exists_lec($conn, $email)) {
+                        $row_errors[] = 'Email already registered in the system';
+                    }
+
+                    $is_valid = empty($row_errors);
+                    if ($is_valid) { $valid_count++; $seen_emails[$email] = true; }
+                    else $error_count++;
+
+                    $preview_rows[] = [
+                        'row'        => $row_num,
+                        'first_name' => $first_name,
+                        'last_name'  => $last_name,
+                        'email'      => $email,
+                        'valid'      => $is_valid,
+                        'errors'     => $row_errors,
+                    ];
+                }
+                fclose($handle);
+
+                if (empty($preview_rows)) {
+                    $parse_errors[] = 'The CSV file contains no data rows.';
+                } else {
+                    $_SESSION['import_preview_lecturers'] = array_values(array_filter(
+                        array_map(fn($r) => $r['valid'] ? [
+                            'first_name' => $r['first_name'],
+                            'last_name'  => $r['last_name'],
+                            'email'      => $r['email'],
+                        ] : null, $preview_rows)
+                    ));
+                }
+            } else {
+                fclose($handle);
+            }
+        }
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * Retrieve credentials after redirect
+ * --------------------------------------------------------------------- */
+$imported_credentials = null;
+if (isset($_GET['done']) && !empty($_SESSION['lecturer_import_credentials'])) {
+    $imported_credentials = $_SESSION['lecturer_import_credentials'];
+    unset($_SESSION['lecturer_import_credentials']);
+}
+
+$page_title = 'Bulk Lecturer Import';
+require_once '../../includes/header.php';
+?>
+<style>
+.import-container{max-width:960px;margin:0 auto}
+.card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);padding:28px;margin-bottom:24px}
+.card-title{font-size:18px;font-weight:600;color:#333;margin:0 0 6px}
+.card-subtitle{font-size:13px;color:#666;margin:0 0 20px}
+.btn{padding:10px 22px;border:none;border-radius:5px;font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;display:inline-block;margin-right:8px;margin-bottom:6px;line-height:1.4}
+.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.btn-success{background:#28a745;color:#fff}
+.btn-secondary{background:#6c757d;color:#fff}
+.btn-sm{padding:6px 14px;font-size:13px}.btn:hover{opacity:.9}
+.form-group{margin-bottom:18px}
+.form-label{display:block;font-size:14px;font-weight:500;margin-bottom:5px;color:#444}
+.form-input{width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:5px;font-size:14px;box-sizing:border-box}
+.alert{padding:14px 18px;border-radius:7px;margin-bottom:20px;font-size:14px}
+.alert-error{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24}
+.alert-info{background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460}
+.alert-success{background:#d4edda;border:1px solid #c3e6cb;color:#155724}
+.alert ul{margin:8px 0 0 18px;padding:0}
+.template-hint{background:#f8f9fa;border:1px dashed #ced4da;border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#555}
+.template-hint code{background:#e9ecef;padding:2px 6px;border-radius:3px;font-family:monospace}
+.stats-bar{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.stat-chip{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600}
+.stat-valid{background:#d4edda;color:#155724}
+.stat-error{background:#f8d7da;color:#721c24}
+.stat-total{background:#cce5ff;color:#004085}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:#f1f3f5;padding:10px 12px;text-align:left;font-weight:600;color:#555;white-space:nowrap;border-bottom:2px solid #dee2e6}
+tbody td{padding:9px 12px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+tbody tr:hover{background:#fafafa}
+tr.row-valid{border-left:3px solid #28a745}
+tr.row-error{border-left:3px solid #dc3545}
+.badge-valid{background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.badge-error{background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.err-list{margin:4px 0 0 0;padding:0 0 0 14px;color:#dc3545;font-size:12px}
+.err-list li{margin-bottom:2px}
+.cred-warning{background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#856404}
+</style>
+
+<div class="page-header">
+    <h1>Bulk Lecturer Import</h1>
+    <p>Upload a CSV file to add multiple lecturers at once</p>
+</div>
+
+<div class="import-container">
+
+<?php if ($imported_credentials !== null): ?>
+
+<div class="alert alert-success">
+    <strong><?php echo count($imported_credentials); ?> lecturer(s) imported successfully.</strong>
+    <br><a href="list.php" style="color:inherit;font-weight:600">View All Lecturers →</a>
+</div>
+
+<div class="card">
+    <p class="card-title">Generated Credentials</p>
+    <div class="cred-warning">
+        <strong>Important:</strong> Save or share these credentials now. Passwords are not stored in plain text and cannot be retrieved later.
+        Each lecturer will be prompted to change their password on first login.
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Username</th><th>Temporary Password</th></tr></thead>
+            <tbody>
+            <?php foreach ($imported_credentials as $c): ?>
+            <tr>
+                <td><?php echo htmlspecialchars($c['name']); ?></td>
+                <td><?php echo htmlspecialchars($c['email']); ?></td>
+                <td><code><?php echo htmlspecialchars($c['username']); ?></code></td>
+                <td><code><?php echo htmlspecialchars($c['password']); ?></code></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <br>
+    <button onclick="printCredentials()" class="btn btn-primary">Print Credentials</button>
+    <a href="list.php" class="btn btn-secondary">Go to Lecturers List</a>
+</div>
+<script>
+function printCredentials(){
+    var tbl=document.querySelector('.table-wrap').innerHTML;
+    var w=window.open('','_blank');
+    w.document.write('<html><head><title>Lecturer Credentials</title><style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;font-size:13px}</style></head><body>'+tbl+'</body></html>');
+    w.print();w.close();
+}
+</script>
+
+<?php elseif (!empty($preview_rows)): ?>
+
+<?php if (!empty($parse_errors)): ?>
+<div class="alert alert-error"><strong>File Error:</strong>
+<ul><?php foreach ($parse_errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div>
+<?php endif; ?>
+
+<div class="card">
+    <p class="card-title">Import Preview</p>
+    <p class="card-subtitle">Review before confirming. Only valid rows will be imported. Credentials will be generated automatically.</p>
+    <div class="stats-bar">
+        <span class="stat-chip stat-total">Total: <?php echo count($preview_rows); ?></span>
+        <span class="stat-chip stat-valid">Valid: <?php echo $valid_count; ?></span>
+        <span class="stat-chip stat-error">Errors: <?php echo $error_count; ?></span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Row</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Status</th></tr></thead>
+            <tbody>
+            <?php foreach ($preview_rows as $pr): ?>
+            <tr class="<?php echo $pr['valid'] ? 'row-valid' : 'row-error'; ?>">
+                <td><?php echo (int)$pr['row']; ?></td>
+                <td><?php echo htmlspecialchars($pr['first_name']); ?></td>
+                <td><?php echo htmlspecialchars($pr['last_name']); ?></td>
+                <td><?php echo htmlspecialchars($pr['email']); ?></td>
+                <td>
+                    <?php if ($pr['valid']): ?>
+                        <span class="badge-valid">Valid</span>
+                    <?php else: ?>
+                        <span class="badge-error">Error</span>
+                        <ul class="err-list"><?php foreach ($pr['errors'] as $err): ?><li><?php echo htmlspecialchars($err); ?></li><?php endforeach; ?></ul>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php if ($valid_count > 0): ?>
+    <br>
+    <form method="POST">
+        <?php csrf_token_input(); ?>
+        <input type="hidden" name="action" value="confirm">
+        <button type="submit" class="btn btn-success">Confirm Import (<?php echo $valid_count; ?> lecturer<?php echo $valid_count !== 1 ? 's' : ''; ?>)</button>
+        <a href="import.php" class="btn btn-secondary">Cancel</a>
+        <?php if ($error_count > 0): ?>
+        <p style="margin-top:10px;font-size:13px;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:5px;display:inline-block">
+            <?php echo $error_count; ?> row(s) with errors will be skipped.
+        </p>
+        <?php endif; ?>
+    </form>
+    <?php else: ?>
+    <div class="alert alert-error" style="margin-top:16px">No valid rows found. Please fix the errors and try again.</div>
+    <a href="import.php" class="btn btn-primary" style="margin-top:8px">Upload Again</a>
+    <?php endif; ?>
+</div>
+
+<?php else: ?>
+
+<?php if (!empty($_SESSION['flash_message'])): ?>
+<div class="alert alert-<?php echo $_SESSION['flash_type'] === 'error' ? 'error' : 'info'; ?>">
+    <?php echo htmlspecialchars($_SESSION['flash_message']); ?>
+</div>
+<?php unset($_SESSION['flash_message'], $_SESSION['flash_type']); endif; ?>
+
+<?php if (!empty($parse_errors)): ?>
+<div class="alert alert-error"><strong>Error:</strong>
+<ul><?php foreach ($parse_errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div>
+<?php endif; ?>
+
+<div class="card">
+    <p class="card-title">Upload CSV File</p>
+    <p class="card-subtitle">Import multiple lecturers by uploading a correctly formatted CSV file. A username and temporary password will be generated for each.</p>
+
+    <div class="template-hint">
+        <strong>Required columns (in order):</strong>
+        <code>first_name</code>, <code>last_name</code>, <code>email</code>
+        <br><br>
+        <strong>Notes:</strong>
+        <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
+            <li>Each email must be unique and not already registered in the system.</li>
+            <li>Usernames and temporary passwords are generated automatically and shown after import.</li>
+            <li>Lecturers will be prompted to change their password on first login.</li>
+        </ul>
+        <br>
+        <a href="import.php?action=template" class="btn btn-outline" style="background:#fff;border:2px solid #667eea;color:#667eea;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:500">
+            Download Template CSV
+        </a>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data">
+        <?php csrf_token_input(); ?>
+        <div class="form-group">
+            <label class="form-label" for="csv_file">Select CSV File</label>
+            <input type="file" name="csv_file" id="csv_file" class="form-input" accept=".csv,text/csv" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Upload & Preview</button>
+        <a href="list.php" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+
+<?php endif; ?>
+</div>
+
+<?php require_once '../../includes/footer.php'; ?>
