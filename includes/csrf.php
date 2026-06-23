@@ -53,9 +53,12 @@ if (!defined('CSRF_TOKEN_NAME')) {
  */
 function generate_csrf_token($force_new = false)
 {
-    // Check if token already exists and we're not forcing a new one
+    // Return existing token only if it is present and not yet expired
     if (!$force_new && isset($_SESSION[CSRF_TOKEN_NAME]) && !empty($_SESSION[CSRF_TOKEN_NAME])) {
-        return $_SESSION[CSRF_TOKEN_NAME];
+        if (!is_csrf_token_expired()) {
+            return $_SESSION[CSRF_TOKEN_NAME];
+        }
+        // Expired — fall through to regenerate
     }
 
     // Generate new random token
