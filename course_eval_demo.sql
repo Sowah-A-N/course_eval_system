@@ -206,7 +206,7 @@ CREATE TABLE `user_details` (
   `is_active`             TINYINT      NOT NULL DEFAULT 1,
   `force_password_change` TINYINT(1)   NOT NULL DEFAULT 0,
   `created_at`            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`            TIMESTAMP    NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `updated_at`            DATETIME     NULL DEFAULT NULL,
   FOREIGN KEY (`role_id`)       REFERENCES `roles`(`role_id`),
   FOREIGN KEY (`department_id`) REFERENCES `department`(`t_id`),
   FOREIGN KEY (`class_id`)      REFERENCES `classes`(`t_id`),
