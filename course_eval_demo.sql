@@ -22,8 +22,8 @@ DROP TABLE IF EXISTS `academic_year`;
 CREATE TABLE `academic_year` (
   `academic_year_id` INT AUTO_INCREMENT PRIMARY KEY,
   `start_year`       INT NOT NULL,
-  `end_year`         INT GENERATED ALWAYS AS (`start_year` + 1) STORED,
-  `year_label`       VARCHAR(9) GENERATED ALWAYS AS (CONCAT(`start_year`,'/',`start_year`+1)) STORED,
+  `end_year`         INT AS (`start_year` + 1) PERSISTENT,
+  `year_label`       VARCHAR(9) AS (CONCAT(`start_year`,'/',`start_year`+1)) PERSISTENT,
   `is_active`        TINYINT(1) DEFAULT 0,
   `created_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
