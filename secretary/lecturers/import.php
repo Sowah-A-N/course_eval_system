@@ -183,11 +183,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     $parse_errors[] = 'The CSV file contains no data rows.';
                 } else {
                     $_SESSION['import_preview_lecturers'] = array_values(array_filter(
-                        array_map(fn($r) => $r['valid'] ? [
+                        array_map(function($r) { return $r['valid'] ? [
                             'first_name' => $r['first_name'],
                             'last_name'  => $r['last_name'],
                             'email'      => $r['email'],
-                        ] : null, $preview_rows)
+                        ] : null; }, $preview_rows)
                     ));
                 }
             } else {

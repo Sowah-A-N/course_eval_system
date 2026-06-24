@@ -21,11 +21,11 @@ if($dept>0){
     mysqli_stmt_execute($stmt);
     $res_courses=mysqli_stmt_get_result($stmt);
     while($r=mysqli_fetch_assoc($res_courses)){
-        $url = match($role){
-            ROLE_ADMIN   => 'admin/courses/list.php',
-            ROLE_HOD     => 'hod/courses/list.php',
-            default      => 'admin/courses/list.php',
-        };
+        if ($role === ROLE_HOD) {
+            $url = 'hod/courses/list.php';
+        } else {
+            $url = 'admin/courses/list.php';
+        }
         $results[]=['type'=>'Course','label'=>htmlspecialchars($r['course_code']),'sub'=>htmlspecialchars($r['name']),'url'=>$url];
     }
     mysqli_stmt_close($stmt);
@@ -47,11 +47,13 @@ if(in_array($role,[ROLE_ADMIN,ROLE_SECRETARY,ROLE_HOD])){
     mysqli_stmt_execute($stmt);
     $res_students=mysqli_stmt_get_result($stmt);
     while($r=mysqli_fetch_assoc($res_students)){
-        $url = match($role){
-            ROLE_ADMIN     => 'admin/users/list.php',
-            ROLE_SECRETARY => 'secretary/students/list.php',
-            default        => 'hod/students/list.php',
-        };
+        if ($role === ROLE_ADMIN) {
+            $url = 'admin/users/list.php';
+        } elseif ($role === ROLE_SECRETARY) {
+            $url = 'secretary/students/list.php';
+        } else {
+            $url = 'hod/students/list.php';
+        }
         $results[]=['type'=>'Student','label'=>htmlspecialchars($r['f_name'].' '.$r['l_name']),'sub'=>'','url'=>$url];
     }
     mysqli_stmt_close($stmt);

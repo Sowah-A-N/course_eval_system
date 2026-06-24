@@ -159,7 +159,7 @@ foreach($periods as $p){
 <?php else:
 // Compute summary stats
 $total_evals = array_sum(array_column($courses,'used_tokens'));
-$rated_courses = array_filter($courses, fn($c)=>$c['avg_rating']!==null);
+$rated_courses = array_filter($courses, function($c){ return $c['avg_rating'] !== null; });
 $overall_avg = count($rated_courses)>0
     ? round(array_sum(array_column(array_values($rated_courses),'avg_rating'))/count($rated_courses),2)
     : null;

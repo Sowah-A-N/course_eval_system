@@ -276,13 +276,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     $parse_errors[] = 'The CSV file contains no data rows.';
                 } else {
                     $_SESSION['import_preview'] = array_values(array_filter(
-                        array_map(fn($r) => $r['valid'] ? [
+                        array_map(function($r) { return $r['valid'] ? [
                             'f_name'   => $r['f_name'],
                             'l_name'   => $r['l_name'],
                             'email'    => $r['email'],
                             'level_id' => $r['level_id'],
                             'class_id' => $r['class_id'],
-                        ] : null, $preview_rows)
+                        ] : null; }, $preview_rows)
                     ));
                 }
             } else {
@@ -394,12 +394,12 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <script>
 (function(){
-    var data = <?php echo json_encode(array_map(fn($c) => [
+    var data = <?php echo json_encode(array_map(function($c) { return [
         htmlspecialchars($c['name'],     ENT_QUOTES),
         htmlspecialchars($c['email'],    ENT_QUOTES),
         htmlspecialchars($c['username'], ENT_QUOTES),
         htmlspecialchars($c['password'], ENT_QUOTES),
-    ], $import_credentials), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>;
+    ]; }, $import_credentials), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>;
     window.downloadCredsCsv = function(){
         var rows = [['Name','Email','Username','Temp Password']].concat(data);
         var csv  = rows.map(function(r){

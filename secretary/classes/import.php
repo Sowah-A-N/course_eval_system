@@ -181,11 +181,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     $parse_errors[] = 'The CSV file contains no data rows.';
                 } else {
                     $_SESSION['import_preview_classes'] = array_values(array_filter(
-                        array_map(fn($r) => $r['valid'] ? [
+                        array_map(function($r) { return $r['valid'] ? [
                             'class_name' => $r['class_name'],
                             'class_code' => $r['class_code'],
                             'level_id'   => $r['level_id'],
-                        ] : null, $preview_rows)
+                        ] : null; }, $preview_rows)
                     ));
                 }
             } else {
