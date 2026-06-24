@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = mysqli_prepare($conn,
             "INSERT INTO user_details
              (username, password, email, f_name, l_name, unique_id, role_id,
-              department_id, level_id, class_id, is_active, force_password_change, date_created)
+              department_id, level_id, class_id, is_active, force_password_change, created_at)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,1,NOW())");
         mysqli_stmt_bind_param($stmt, "ssssssiiii",
             $username, $password_hash, $email, $f_name, $l_name,

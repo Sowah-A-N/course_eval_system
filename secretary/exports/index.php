@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
 
             $query = "
                 SELECT u.unique_id, u.f_name, u.l_name, u.email, u.username,
-                       l.level_name, c.class_name, u.is_active, u.date_created
+                       l.level_name, c.class_name, u.is_active, u.created_at
                 FROM user_details u
                 LEFT JOIN level l ON u.level_id = l.t_id
                 LEFT JOIN classes c ON u.class_id = c.t_id
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
                     $row['level_name'],
                     $row['class_name'],
                     $row['is_active'] ? 'Active' : 'Inactive',
-                    date('Y-m-d', strtotime($row['date_created']))
+                    date('Y-m-d', strtotime($row['created_at']))
                 ]);
             }
             mysqli_stmt_close($stmt);
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
             fputcsv($output, ['First Name', 'Last Name', 'Email', 'Username', 'Courses Assigned', 'Status', 'Date Created']);
 
             $query = "
-                SELECT u.f_name, u.l_name, u.email, u.username, u.is_active, u.date_created,
+                SELECT u.f_name, u.l_name, u.email, u.username, u.is_active, u.created_at,
                        COUNT(DISTINCT cl.course_id) as course_count
                 FROM user_details u
                 LEFT JOIN course_lecturers cl ON u.user_id = cl.lecturer_user_id
@@ -132,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
                     $row['username'],
                     $row['course_count'],
                     $row['is_active'] ? 'Active' : 'Inactive',
-                    date('Y-m-d', strtotime($row['date_created']))
+                    date('Y-m-d', strtotime($row['created_at']))
                 ]);
             }
             mysqli_stmt_close($stmt);

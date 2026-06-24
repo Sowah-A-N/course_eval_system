@@ -44,9 +44,9 @@ function get_levels_map_c(mysqli $conn): array {
 }
 
 function get_semesters_map(mysqli $conn): array {
-    $res = mysqli_query($conn, "SELECT t_id, semester_name FROM semester ORDER BY t_id");
+    $res = mysqli_query($conn, "SELECT semester_id, semester_name FROM semesters ORDER BY semester_id");
     $map = [];
-    while ($row = mysqli_fetch_assoc($res)) $map[(int)$row['t_id']] = $row['semester_name'];
+    while ($row = mysqli_fetch_assoc($res)) $map[(int)$row['semester_id']] = $row['semester_name'];
     return $map;
 }
 

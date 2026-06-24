@@ -385,7 +385,7 @@ require_once '../../includes/header.php';
                 </div>
                 <div class="profile-meta-item">
                     <span>📅</span>
-                    <span>Member since <?php echo date('M Y', strtotime($student['date_created'])); ?></span>
+                    <span>Member since <?php echo date('M Y', strtotime($student['created_at'])); ?></span>
                 </div>
             </div>
         </div>
@@ -497,7 +497,7 @@ require_once '../../includes/header.php';
             </div>
             <div class="info-row">
                 <span class="info-label">Account Created</span>
-                <span class="info-value"><?php echo date('M d, Y', strtotime($student['date_created'])); ?></span>
+                <span class="info-value"><?php echo date('M d, Y', strtotime($student['created_at'])); ?></span>
             </div>
             <div class="info-row">
                 <span class="info-label">User ID</span>
