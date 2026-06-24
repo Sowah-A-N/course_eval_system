@@ -626,7 +626,7 @@ CREATE TABLE `login_attempts` (
   `id`                 INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `ip_address`         VARCHAR(45)   NOT NULL,
   `username_attempted` VARCHAR(100)  NOT NULL DEFAULT '',
-  `attempted_at`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `attempted_at`       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ip_attempted_at` (`ip_address`,`attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -641,7 +641,7 @@ CREATE TABLE `password_reset_tokens` (
   `token_hash` VARCHAR(64) UNIQUE,
   `expires_at` DATETIME    NOT NULL,
   `used_at`    DATETIME    NULL DEFAULT NULL,
-  `created_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `ip_address` VARCHAR(45) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_token_hash` (`token_hash`),
