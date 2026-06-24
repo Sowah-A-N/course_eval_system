@@ -208,13 +208,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     $parse_errors[] = 'The CSV file contains no data rows.';
                 } else {
                     $_SESSION['import_preview_courses'] = array_values(array_filter(
-                        array_map(fn($r) => $r['valid'] ? [
+                        array_map(function($r) { return $r['valid'] ? [
                             'course_code'  => $r['course_code'],
                             'course_name'  => $r['course_name'],
                             'level_id'     => $r['level_id'],
                             'semester_id'  => $r['semester_id'],
                             'credit_hours' => $r['credit_hours'],
-                        ] : null, $preview_rows)
+                        ] : null; }, $preview_rows)
                     ));
                 }
             } else {

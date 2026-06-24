@@ -12,7 +12,7 @@
  * On collision: append incrementing suffix → firstname.lastname2, …3, …
  */
 function ces_derive_username(mysqli $conn, string $f_name, string $l_name): string {
-    $sanitize = fn(string $s) => strtolower(preg_replace('/[^a-zA-Z]/', '', $s));
+    $sanitize = function($s) { return strtolower(preg_replace('/[^a-zA-Z]/', '', $s)); };
     $base = $sanitize($f_name) . '.' . $sanitize($l_name);
     if ($base === '.' || $base === '') {
         $base = 'user.' . bin2hex(random_bytes(3));
