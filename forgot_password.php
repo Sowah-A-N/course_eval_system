@@ -110,13 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              . "Reply-To: " . SYSTEM_EMAIL_FROM . "\r\n"
                              . "X-Mailer: PHP/" . phpversion();
 
-                    // mail() may not be configured on all WAMP setups.
-                    // Log the URL in development so the feature can be tested
-                    // without a real mail server.
                     $mail_sent = @mail($to, $subject, $body, $headers);
-                    if (!$mail_sent && IS_DEVELOPMENT) {
-                        error_log('[CES][DEV] Password reset URL for ' . $email . ': ' . $reset_url);
-                    }
                 }
                 // Whether rate-limited or not — same message (enumeration safe)
             }

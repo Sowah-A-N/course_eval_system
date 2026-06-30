@@ -41,12 +41,6 @@
 //   force IS_DEVELOPMENT = true, enabling verbose error output and relaxed
 //   security settings.  An environment variable is set by the server operator
 //   at deploy time and cannot be overridden by request headers.
-if (!defined('IS_DEVELOPMENT')) {
-    $_app_env = strtolower(trim((string)(getenv('APP_ENV') ?: 'development')));
-    define('IS_DEVELOPMENT', !in_array($_app_env, ['production', 'prod'], true));
-    define('IS_PRODUCTION',  !IS_DEVELOPMENT);
-    unset($_app_env);
-}
 
 // ============================================
 // ROLE DEFINITIONS
@@ -165,7 +159,7 @@ define('SESSION_ABSOLUTE_LIFETIME', 28800);  // 8 hours (28 800 seconds)
 define('SESSION_COOKIE_LIFETIME', 0);        // 0 = Until browser closes
 define('SESSION_COOKIE_PATH', '/');
 define('SESSION_COOKIE_DOMAIN', '');         // Empty = Current domain
-define('SESSION_COOKIE_SECURE', !IS_DEVELOPMENT);  // true in production (HTTPS), false in dev
+define('SESSION_COOKIE_SECURE', false);
 define('SESSION_COOKIE_HTTPONLY', true);     // Prevent JavaScript access
 define('SESSION_COOKIE_SAMESITE', 'Lax');    // CSRF protection
 
@@ -559,21 +553,9 @@ define('SEMESTER_NAMES', [
 // DEBUG MODE
 // ============================================
 
-/**
- * Enable debug mode in development
- * IMPORTANT: Set to FALSE in production
- */
-define('DEBUG_MODE', IS_DEVELOPMENT);
-
-if (DEBUG_MODE) {
-    ini_set('display_errors', 1);
-    ini_set('display_startup_errors', 1);
-    error_reporting(E_ALL);
-} else {
-    ini_set('display_errors', 0);
-    ini_set('display_startup_errors', 0);
-    error_reporting(0);
-}
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+error_reporting(0);
 
 // ============================================
 // USAGE EXAMPLES

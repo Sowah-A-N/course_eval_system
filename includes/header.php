@@ -65,12 +65,6 @@ header(
     "form-action 'self';"
 );
 
-// Instruct browsers to always use HTTPS for this origin once visited.
-// Only sent in production (HTTPS) so that local HTTP dev is not broken.
-if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
-    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
-}
-
 // Disable browser features that are unnecessary for this application.
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 // ============================================
