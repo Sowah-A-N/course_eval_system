@@ -97,7 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Build reset URL
                     $reset_url = rtrim(APP_URL, '/') . '/reset_password.php?token=' . urlencode($raw_token);
 
-                    // Send email via PHP mail() — replace with PHPMailer/SMTP in production
                     $to      = $email;
                     $subject = 'Password Reset — ' . APP_NAME;
                     $body    = "You requested a password reset for your " . APP_NAME . " account.\n\n"

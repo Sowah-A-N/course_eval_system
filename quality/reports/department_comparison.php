@@ -26,15 +26,6 @@ require_once '../../includes/csrf.php';
 start_secure_session();
 check_login();
 
-// <?php
-// TEMPORARY DEBUG - Remove after fixing
-// echo "Current Role ID: " . ($_SESSION['role_id'] ?? 'NOT SET') . "<br>";
-// echo "ROLE_ADMIN: " . ROLE_ADMIN . "<br>";
-// echo "ROLE_QUALITY: " . ROLE_QUALITY . "<br>";
-// echo "Check passes: " . (($_SESSION['role_id'] == ROLE_ADMIN || $_SESSION['role_id'] == ROLE_QUALITY) ? 'YES' : 'NO') . "<br>";
-// exit(); // Stop here to see the output
-
-
 // Check role
 if (!defined('ROLE_QUALITY')) {
     define('ROLE_QUALITY', 6);

@@ -543,14 +543,7 @@ define('SEMESTER_NAMES', [
 ]);
 
 // ============================================
-// ENVIRONMENT DETECTION
-// ============================================
-// (IS_DEVELOPMENT and IS_PRODUCTION are defined at the TOP of this file
-//  so that all subsequent constants — such as SESSION_COOKIE_SECURE and
-//  DB_DEBUG_MODE — can reference them without a forward-reference error.)
-
-// ============================================
-// DEBUG MODE
+// ERROR REPORTING
 // ============================================
 
 ini_set('display_errors', 0);
@@ -592,14 +585,9 @@ error_reporting(0);
 /**
  * PRODUCTION DEPLOYMENT CHECKLIST:
  *
- * [ ] Set DEBUG_MODE to FALSE
- * [ ] Set MAINTENANCE_MODE to FALSE (unless deploying)
- * [ ] Update APP_URL to production URL
- * [ ] Set SESSION_COOKIE_SECURE to TRUE (if using HTTPS)
- * [ ] Update INSTITUTION_NAME and details
- * [ ] Review and update ADMIN_EMAIL
- * [ ] Verify all paths are correct
- * [ ] Test all constants are working
- * [ ] Review security settings
+ * [ ] Set APP_URL env var to production URL (Apache: SetEnv APP_URL https://yourdomain.com)
+ * [ ] Set DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME env vars on the server
+ * [ ] Set MAINTENANCE_MODE to FALSE (unless deploying in maintenance window)
+ * [ ] Update INSTITUTION_NAME and ADMIN_EMAIL if needed
  * [ ] Verify timezone is correct
  */
