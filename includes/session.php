@@ -457,24 +457,42 @@ function display_session_message() {
  * @return string Base URL
  */
 function get_base_url() {
-    if (defined('APP_URL') && APP_URL !== '') {
-        return rtrim(APP_URL, '/');
+    // Optional override: if APP_URL is set in the environment, honor it as an
+    // absolute base URL. This lets a reverse-proxy or custom deployment pin the
+    // public URL when it can't be inferred from the filesystem layout.
+    $env_url = getenv('APP_URL');
+    if ($env_url !== false && trim($env_url) !== '') {
+        return rtrim(trim($env_url), '/');
     }
 
-    // APP_URL must be set in config/constants.php (or via the APP_URL env var).
-    // The old fallback constructed a URL from $_SERVER['HTTP_HOST'], which is
-    // an attacker-controlled request header on many Apache/Nginx configurations.
-    // That fallback enabled Host Header Injection — an attacker who sent
-    //   Host: evil.com
-    // would receive redirect URLs pointing to evil.com, enabling phishing and
-    // (once password-reset is added) reset-link poisoning.
+    // Default: return a ROOT-RELATIVE base path (e.g. "/course_evaluation" in a
+    // subdirectory install, or "" when the app sits at the web root). Emitting a
+    // path instead of a full scheme://host URL means:
+    //   - it works unchanged on localhost and on any production domain with no
+    //     configuration (the same code runs in every environment);
+    //   - the browser resolves the relative Location: against the current
+    //     origin, so a forged Host header cannot redirect users off-site —
+    //     host-header injection is impossible because no host is ever emitted.
     //
-    // If APP_URL is genuinely absent we log the misconfiguration and stop.
-    // A missing APP_URL is a deployment error, not a runtime condition to
-    // paper over with untrusted header data.
-    error_log('[CES] CRITICAL: APP_URL is not defined. Set APP_URL in config/constants.php or the APP_URL environment variable.');
-    http_response_code(500);
-    die('Application misconfiguration: APP_URL is not set. Please contact the system administrator.');
+    // The path is derived from the application's own location on disk relative
+    // to the web server's document root — never from a request header. (The
+    // password-reset email flow, which needs an absolute URL, uses APP_URL
+    // directly and is unaffected by this function.)
+    $app_dir  = realpath(defined('BASE_DIR') ? BASE_DIR : dirname(__DIR__));
+    $doc_root = !empty($_SERVER['DOCUMENT_ROOT']) ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
+
+    if ($app_dir !== false && $doc_root !== false) {
+        $app_dir  = str_replace('\\', '/', rtrim($app_dir, '/\\'));
+        $doc_root = str_replace('\\', '/', rtrim($doc_root, '/\\'));
+        // Case-insensitive prefix match (Windows paths differ only by case).
+        if (stripos($app_dir, $doc_root) === 0) {
+            return rtrim(substr($app_dir, strlen($doc_root)), '/');
+        }
+    }
+
+    // Could not match the document root (e.g. symlinked webroot). Fall back to
+    // origin-root so redirects still stay on-site.
+    return '';
 }
 
 /**
