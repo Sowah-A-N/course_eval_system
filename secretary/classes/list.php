@@ -56,7 +56,7 @@ require_once '../../includes/header.php';
 <div class="top-actions">
 <div>
 <a href="create.php" class="btn btn-primary">+ Add New Class</a>
-<a href="import.php" class="btn btn-secondary">+ Import from CSV</a>
+<a href="import.php" class="btn btn-secondary">+ Import (CSV/Excel)</a>
 </div>
 <div style="color:#666;font-size:14px">
 Total: <strong><?php echo count($classes);?></strong> class(es)

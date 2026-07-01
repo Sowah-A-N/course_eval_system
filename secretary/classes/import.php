@@ -6,6 +6,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/import_helpers.php';
 
 start_secure_session();
 check_login();
@@ -113,83 +114,75 @@ $error_count  = 0;
 $parse_errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confirm') {
+    $rows = [];
     if (!validate_csrf_token()) {
         $parse_errors[] = 'Invalid security token.';
-    } elseif (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
-        $parse_errors[] = 'Please select a valid CSV file to upload.';
     } else {
-        $file = $_FILES['csv_file']['tmp_name'];
-        $ext  = strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION));
-        $mime = mime_content_type($file);
-        $allowed_mime = ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'];
-        if (!in_array($mime, $allowed_mime, true) && $ext !== 'csv') {
-            $parse_errors[] = 'File must be a CSV file.';
+        try {
+            $rows = import_read_upload('import_file');
+        } catch (Throwable $e) {
+            $parse_errors[] = $e->getMessage();
+        }
+    }
+
+    if (empty($parse_errors)) {
+        $levels = get_levels_map($conn);
+        $col = import_header_map($rows[0]);
+        $missing = array_diff(['class_name', 'class_code', 'level_id'], array_keys($col));
+        if (!empty($missing)) {
+            $parse_errors[] = 'File is missing required columns: ' . implode(', ', $missing);
         } else {
-            $levels = get_levels_map($conn);
-            $handle = fopen($file, 'r');
-            $header = fgetcsv($handle);
-            if ($header !== false) {
-                $header_lower = array_map('strtolower', array_map('trim', $header));
-                $missing = array_diff(['class_name', 'class_code', 'level_id'], $header_lower);
-                if (!empty($missing)) $parse_errors[] = 'CSV missing columns: ' . implode(', ', $missing);
-            } else {
-                $parse_errors[] = 'Could not read the CSV file.';
+            $seen_codes = [];
+            $total = count($rows);
+            for ($i = 1; $i < $total; $i++) {
+                if (count(array_filter(array_map('trim', $rows[$i]))) === 0) continue;
+
+                $class_name   = import_cell($rows[$i], $col, 'class_name');
+                $class_code   = import_cell($rows[$i], $col, 'class_code');
+                $level_id_raw = import_cell($rows[$i], $col, 'level_id');
+
+                $row_errors = [];
+                if ($class_name === '') $row_errors[] = 'Class name is required';
+                if ($class_code === '') {
+                    $row_errors[] = 'Class code is required';
+                } elseif (isset($seen_codes[strtolower($class_code)])) {
+                    $row_errors[] = 'Duplicate class code in this file';
+                } elseif (class_code_exists($conn, $class_code, $department_id)) {
+                    $row_errors[] = 'Class code already exists in your department';
+                }
+
+                $level_id = filter_var($level_id_raw, FILTER_VALIDATE_INT);
+                if ($level_id === false || $level_id <= 0) {
+                    $row_errors[] = 'level_id must be a positive integer';
+                } elseif (!isset($levels[$level_id])) {
+                    $row_errors[] = "level_id $level_id does not exist";
+                }
+
+                $is_valid = empty($row_errors);
+                if ($is_valid) { $valid_count++; $seen_codes[strtolower($class_code)] = true; }
+                else $error_count++;
+
+                $preview_rows[] = [
+                    'row'        => $i + 1,
+                    'class_name' => $class_name,
+                    'class_code' => $class_code,
+                    'level_id'   => $level_id !== false ? $level_id : 0,
+                    'level_name' => ($level_id && isset($levels[$level_id])) ? $levels[$level_id] : $level_id_raw,
+                    'valid'      => $is_valid,
+                    'errors'     => $row_errors,
+                ];
             }
 
-            if (empty($parse_errors)) {
-                $seen_codes = [];
-                $row_num = 1;
-                while (($csv_row = fgetcsv($handle)) !== false) {
-                    $row_num++;
-                    if (count(array_filter(array_map('trim', $csv_row))) === 0) continue;
-                    [$class_name, $class_code, $level_id_raw] = array_pad(array_map('trim', $csv_row), 3, '');
-
-                    $row_errors = [];
-                    if ($class_name === '') $row_errors[] = 'Class name is required';
-                    if ($class_code === '') {
-                        $row_errors[] = 'Class code is required';
-                    } elseif (isset($seen_codes[strtolower($class_code)])) {
-                        $row_errors[] = 'Duplicate class code in this file';
-                    } elseif (class_code_exists($conn, $class_code, $department_id)) {
-                        $row_errors[] = 'Class code already exists in your department';
-                    }
-
-                    $level_id = filter_var($level_id_raw, FILTER_VALIDATE_INT);
-                    if ($level_id === false || $level_id <= 0) {
-                        $row_errors[] = 'level_id must be a positive integer';
-                    } elseif (!isset($levels[$level_id])) {
-                        $row_errors[] = "level_id $level_id does not exist";
-                    }
-
-                    $is_valid = empty($row_errors);
-                    if ($is_valid) { $valid_count++; $seen_codes[strtolower($class_code)] = true; }
-                    else $error_count++;
-
-                    $preview_rows[] = [
-                        'row'        => $row_num,
-                        'class_name' => $class_name,
-                        'class_code' => $class_code,
-                        'level_id'   => $level_id !== false ? $level_id : 0,
-                        'level_name' => ($level_id && isset($levels[$level_id])) ? $levels[$level_id] : $level_id_raw,
-                        'valid'      => $is_valid,
-                        'errors'     => $row_errors,
-                    ];
-                }
-                fclose($handle);
-
-                if (empty($preview_rows)) {
-                    $parse_errors[] = 'The CSV file contains no data rows.';
-                } else {
-                    $_SESSION['import_preview_classes'] = array_values(array_filter(
-                        array_map(function($r) { return $r['valid'] ? [
-                            'class_name' => $r['class_name'],
-                            'class_code' => $r['class_code'],
-                            'level_id'   => $r['level_id'],
-                        ] : null; }, $preview_rows)
-                    ));
-                }
+            if (empty($preview_rows)) {
+                $parse_errors[] = 'The file contains no data rows.';
             } else {
-                fclose($handle);
+                $_SESSION['import_preview_classes'] = array_values(array_filter(
+                    array_map(function($r) { return $r['valid'] ? [
+                        'class_name' => $r['class_name'],
+                        'class_code' => $r['class_code'],
+                        'level_id'   => $r['level_id'],
+                    ] : null; }, $preview_rows)
+                ));
             }
         }
     }
@@ -237,7 +230,7 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <div class="page-header">
     <h1>Bulk Class Import</h1>
-    <p>Upload a CSV file to add multiple classes at once</p>
+    <p>Upload a CSV or Excel file to add multiple classes at once</p>
 </div>
 
 <div class="import-container">
@@ -316,12 +309,13 @@ tr.row-error{border-left:3px solid #dc3545}
 <?php endif; ?>
 
 <div class="card">
-    <p class="card-title">Upload CSV File</p>
-    <p class="card-subtitle">Import multiple classes by uploading a correctly formatted CSV file. Opens in Excel.</p>
+    <p class="card-title">Upload CSV or Excel File</p>
+    <p class="card-subtitle">Import multiple classes by uploading a CSV (.csv) or Excel (.xlsx) file.</p>
 
     <div class="template-hint">
-        <strong>Required columns (in order):</strong>
+        <strong>Required columns:</strong>
         <code>class_name</code>, <code>class_code</code>, <code>level_id</code>
+        <span style="color:#888">(any order — matched by column heading)</span>
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
@@ -352,8 +346,8 @@ tr.row-error{border-left:3px solid #dc3545}
     <form method="POST" enctype="multipart/form-data">
         <?php csrf_token_input(); ?>
         <div class="form-group">
-            <label class="form-label" for="csv_file">Select CSV File</label>
-            <input type="file" name="csv_file" id="csv_file" class="form-input" accept=".csv,text/csv" required>
+            <label class="form-label" for="import_file">Select CSV or Excel File</label>
+            <input type="file" name="import_file" id="import_file" class="form-input" accept=".csv,.xlsx" required>
         </div>
         <button type="submit" class="btn btn-primary">Upload & Preview</button>
         <a href="list.php" class="btn btn-secondary">Cancel</a>

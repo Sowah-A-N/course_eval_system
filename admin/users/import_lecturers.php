@@ -1,6 +1,10 @@
 <?php
 /**
- * Secretary — Bulk Lecturer Import via CSV
+ * Admin — Bulk Lecturer Import via CSV/Excel
+ *
+ * Unlike the secretary importer, an admin is not tied to a single department,
+ * so the admin chooses the target department on the upload form and that choice
+ * is carried through preview -> confirm.
  */
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
@@ -12,14 +16,12 @@ require_once '../../includes/import_helpers.php';
 start_secure_session();
 check_login();
 
-if ($_SESSION['role_id'] !== ROLE_SECRETARY) {
+if ($_SESSION['role_id'] !== ROLE_ADMIN) {
     $_SESSION['flash_message'] = 'Access denied.';
     $_SESSION['flash_type']    = 'error';
     header("Location: ../../login.php");
     exit();
 }
-
-$department_id = (int) $_SESSION['department_id'];
 
 /* -----------------------------------------------------------------------
  * Step 0 — Template download
@@ -47,6 +49,37 @@ function email_exists_lec(mysqli $conn, string $email): bool {
     return $found;
 }
 
+function dept_exists_admin(mysqli $conn, int $dept_id): bool {
+    $stmt = mysqli_prepare($conn, "SELECT t_id FROM department WHERE t_id=? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, "i", $dept_id);
+    mysqli_stmt_execute($stmt);
+    $found = mysqli_stmt_get_result($stmt)->num_rows > 0;
+    mysqli_stmt_close($stmt);
+    return $found;
+}
+
+function dept_name_admin(mysqli $conn, int $dept_id): string {
+    $stmt = mysqli_prepare($conn, "SELECT dep_name FROM department WHERE t_id=? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, "i", $dept_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $name = '';
+    if ($row = mysqli_fetch_assoc($res)) {
+        $name = (string) $row['dep_name'];
+    }
+    mysqli_stmt_close($stmt);
+    return $name;
+}
+
+/* Departments list for the upload form. */
+$departments = [];
+$dept_result = mysqli_query($conn, "SELECT t_id, dep_name FROM department ORDER BY dep_name");
+if ($dept_result) {
+    while ($drow = mysqli_fetch_assoc($dept_result)) {
+        $departments[] = $drow;
+    }
+}
+
 /* -----------------------------------------------------------------------
  * Step 3 — Confirm import
  * --------------------------------------------------------------------- */
@@ -54,15 +87,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
     if (!validate_csrf_token()) {
         $_SESSION['flash_message'] = 'Invalid security token.';
         $_SESSION['flash_type']    = 'error';
-        header("Location: import.php");
+        header("Location: import_lecturers.php");
         exit();
     }
 
-    $preview = $_SESSION['import_preview_lecturers'] ?? [];
+    $preview = $_SESSION['admin_import_preview_lecturers'] ?? [];
+    $dept_id = (int) ($_SESSION['admin_import_dept_lecturers'] ?? 0);
+
     if (empty($preview)) {
-        $_SESSION['flash_message'] = 'No import data found. Please upload a CSV first.';
+        $_SESSION['flash_message'] = 'No import data found. Please upload a file first.';
         $_SESSION['flash_type']    = 'error';
-        header("Location: import.php");
+        header("Location: import_lecturers.php");
+        exit();
+    }
+
+    if ($dept_id <= 0 || !dept_exists_admin($conn, $dept_id)) {
+        $_SESSION['flash_message'] = 'The selected department is no longer valid. Please start again.';
+        $_SESSION['flash_type']    = 'error';
+        header("Location: import_lecturers.php");
         exit();
     }
 
@@ -83,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 
             mysqli_stmt_bind_param($stmt_ins, "issssi",
                 $role_id, $row['first_name'], $row['last_name'],
-                $row['email'], $username, $hashed, $department_id);
+                $row['email'], $username, $hashed, $dept_id);
 
             if (!mysqli_stmt_execute($stmt_ins)) {
                 throw new RuntimeException("DB insert failed for {$row['email']}: " . mysqli_stmt_error($stmt_ins));
@@ -98,42 +140,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 
         mysqli_stmt_close($stmt_ins);
         mysqli_commit($conn);
-        unset($_SESSION['import_preview_lecturers']);
+        unset($_SESSION['admin_import_preview_lecturers'], $_SESSION['admin_import_dept_lecturers']);
 
-        $_SESSION['lecturer_import_credentials'] = $credentials;
-        header("Location: import.php?done=1");
+        $_SESSION['admin_import_lecturers_credentials'] = $credentials;
+        header("Location: import_lecturers.php?done=1");
         exit();
 
     } catch (Throwable $e) {
         mysqli_rollback($conn);
         $_SESSION['flash_message'] = 'Import failed: ' . htmlspecialchars($e->getMessage());
         $_SESSION['flash_type']    = 'error';
-        header("Location: import.php");
+        header("Location: import_lecturers.php");
         exit();
     }
 }
 
 /* -----------------------------------------------------------------------
- * Step 2 — Parse & preview CSV
+ * Step 2 — Parse & preview file
  * --------------------------------------------------------------------- */
-$preview_rows = [];
-$valid_count  = 0;
-$error_count  = 0;
-$parse_errors = [];
+$preview_rows    = [];
+$valid_count     = 0;
+$error_count     = 0;
+$parse_errors    = [];
+$selected_dept   = 0;
+$selected_dept_name = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confirm') {
     $rows = [];
     if (!validate_csrf_token()) {
         $parse_errors[] = 'Invalid security token.';
     } else {
-        try {
-            $rows = import_read_upload('import_file');
-        } catch (Throwable $e) {
-            $parse_errors[] = $e->getMessage();
+        $selected_dept = (int) ($_POST['department_id'] ?? 0);
+        if ($selected_dept <= 0 || !dept_exists_admin($conn, $selected_dept)) {
+            $parse_errors[] = 'Please choose a valid department to import lecturers into.';
+        } else {
+            try {
+                $rows = import_read_upload('import_file');
+            } catch (Throwable $e) {
+                $parse_errors[] = $e->getMessage();
+            }
         }
     }
 
     if (empty($parse_errors)) {
+        $selected_dept_name = dept_name_admin($conn, $selected_dept);
         $col = import_header_map($rows[0]);
         $missing = array_diff(['first_name', 'last_name', 'email'], array_keys($col));
         if (!empty($missing)) {
@@ -179,13 +229,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
             if (empty($preview_rows)) {
                 $parse_errors[] = 'The file contains no data rows.';
             } else {
-                $_SESSION['import_preview_lecturers'] = array_values(array_filter(
+                $_SESSION['admin_import_preview_lecturers'] = array_values(array_filter(
                     array_map(function($r) { return $r['valid'] ? [
                         'first_name' => $r['first_name'],
                         'last_name'  => $r['last_name'],
                         'email'      => $r['email'],
                     ] : null; }, $preview_rows)
                 ));
+                $_SESSION['admin_import_dept_lecturers'] = $selected_dept;
             }
         }
     }
@@ -195,9 +246,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
  * Retrieve credentials after redirect
  * --------------------------------------------------------------------- */
 $imported_credentials = null;
-if (isset($_GET['done']) && !empty($_SESSION['lecturer_import_credentials'])) {
-    $imported_credentials = $_SESSION['lecturer_import_credentials'];
-    unset($_SESSION['lecturer_import_credentials']);
+if (isset($_GET['done']) && !empty($_SESSION['admin_import_lecturers_credentials'])) {
+    $imported_credentials = $_SESSION['admin_import_lecturers_credentials'];
+    unset($_SESSION['admin_import_lecturers_credentials']);
 }
 
 $page_title = 'Bulk Lecturer Import';
@@ -240,6 +291,7 @@ tr.row-error{border-left:3px solid #dc3545}
 .err-list{margin:4px 0 0 0;padding:0 0 0 14px;color:#dc3545;font-size:12px}
 .err-list li{margin-bottom:2px}
 .cred-warning{background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#856404}
+.dept-tag{background:#e7e3ff;color:#4b3f8f;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
 </style>
 
 <div class="page-header">
@@ -299,7 +351,12 @@ function printCredentials(){
 
 <div class="card">
     <p class="card-title">Import Preview</p>
-    <p class="card-subtitle">Review before confirming. Only valid rows will be imported. Credentials will be generated automatically.</p>
+    <p class="card-subtitle">
+        Review before confirming. Only valid rows will be imported. Credentials will be generated automatically.
+        <?php if ($selected_dept_name !== ''): ?>
+        <br>Lecturers will be added to: <span class="dept-tag"><?php echo htmlspecialchars($selected_dept_name); ?></span>
+        <?php endif; ?>
+    </p>
     <div class="stats-bar">
         <span class="stat-chip stat-total">Total: <?php echo count($preview_rows); ?></span>
         <span class="stat-chip stat-valid">Valid: <?php echo $valid_count; ?></span>
@@ -334,7 +391,7 @@ function printCredentials(){
         <?php csrf_token_input(); ?>
         <input type="hidden" name="action" value="confirm">
         <button type="submit" class="btn btn-success">Confirm Import (<?php echo $valid_count; ?> lecturer<?php echo $valid_count !== 1 ? 's' : ''; ?>)</button>
-        <a href="import.php" class="btn btn-secondary">Cancel</a>
+        <a href="import_lecturers.php" class="btn btn-secondary">Cancel</a>
         <?php if ($error_count > 0): ?>
         <p style="margin-top:10px;font-size:13px;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:5px;display:inline-block">
             <?php echo $error_count; ?> row(s) with errors will be skipped.
@@ -343,7 +400,7 @@ function printCredentials(){
     </form>
     <?php else: ?>
     <div class="alert alert-error" style="margin-top:16px">No valid rows found. Please fix the errors and try again.</div>
-    <a href="import.php" class="btn btn-primary" style="margin-top:8px">Upload Again</a>
+    <a href="import_lecturers.php" class="btn btn-primary" style="margin-top:8px">Upload Again</a>
     <?php endif; ?>
 </div>
 
@@ -371,18 +428,30 @@ function printCredentials(){
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
+            <li>Choose the department these lecturers belong to.</li>
             <li>Each email must be unique and not already registered in the system.</li>
             <li>Every lecturer is given the default password <code><?php echo htmlspecialchars(DEFAULT_IMPORT_PASSWORD); ?></code> and must change it on first login.</li>
             <li>Accepted files: <strong>.csv</strong> and <strong>.xlsx</strong>.</li>
         </ul>
         <br>
-        <a href="import.php?action=template" class="btn btn-outline" style="background:#fff;border:2px solid #667eea;color:#667eea;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:500">
+        <a href="import_lecturers.php?action=template" class="btn btn-outline" style="background:#fff;border:2px solid #667eea;color:#667eea;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:500">
             Download Template CSV
         </a>
     </div>
 
     <form method="POST" enctype="multipart/form-data">
         <?php csrf_token_input(); ?>
+        <div class="form-group">
+            <label class="form-label" for="department_id">Target Department</label>
+            <select name="department_id" id="department_id" class="form-input" required>
+                <option value="">— Select a department —</option>
+                <?php foreach ($departments as $d): ?>
+                <option value="<?php echo (int)$d['t_id']; ?>"<?php echo ($selected_dept === (int)$d['t_id']) ? ' selected' : ''; ?>>
+                    <?php echo htmlspecialchars($d['dep_name']); ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
         <div class="form-group">
             <label class="form-label" for="import_file">Select CSV or Excel File</label>
             <input type="file" name="import_file" id="import_file" class="form-input" accept=".csv,.xlsx" required>

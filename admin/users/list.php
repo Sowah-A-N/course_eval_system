@@ -91,6 +91,8 @@ require_once '../../includes/header.php';
 <div class="top-actions">
 <div>
 <a href="create.php" class="btn btn-primary">+ Add New User</a>
+<a href="import_students.php" class="btn btn-secondary">+ Import Students</a>
+<a href="import_lecturers.php" class="btn btn-secondary">+ Import Lecturers</a>
 </div>
 <div style="color:#666;font-size:14px">
 Total: <strong><?php echo count($users);?></strong> user(s)

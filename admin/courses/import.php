@@ -1,6 +1,6 @@
 <?php
 /**
- * Secretary — Bulk Course Import via CSV
+ * Admin — Bulk Course Import via CSV / Excel
  */
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
@@ -11,14 +11,12 @@ require_once '../../includes/import_helpers.php';
 start_secure_session();
 check_login();
 
-if ($_SESSION['role_id'] !== ROLE_SECRETARY) {
+if ($_SESSION['role_id'] !== ROLE_ADMIN) {
     $_SESSION['flash_message'] = 'Access denied.';
     $_SESSION['flash_type']    = 'error';
     header("Location: ../../login.php");
     exit();
 }
-
-$department_id = (int) $_SESSION['department_id'];
 
 /* -----------------------------------------------------------------------
  * Step 0 — Template download
@@ -51,6 +49,13 @@ function get_semesters_map(mysqli $conn): array {
     return $map;
 }
 
+function get_departments_map(mysqli $conn): array {
+    $res = mysqli_query($conn, "SELECT t_id, dep_name FROM department ORDER BY dep_name");
+    $map = [];
+    while ($row = mysqli_fetch_assoc($res)) $map[(int)$row['t_id']] = $row['dep_name'];
+    return $map;
+}
+
 function course_code_exists(mysqli $conn, string $code, int $dept_id): bool {
     $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE course_code=? AND department_id=? LIMIT 1");
     mysqli_stmt_bind_param($stmt, "si", $code, $dept_id);
@@ -71,8 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         exit();
     }
 
-    $preview = $_SESSION['import_preview_courses'] ?? [];
-    if (empty($preview)) {
+    $preview       = $_SESSION['admin_import_preview_courses'] ?? [];
+    $department_id = (int) ($_SESSION['admin_import_dept_courses'] ?? 0);
+    if (empty($preview) || $department_id <= 0) {
         $_SESSION['flash_message'] = 'No import data found. Please upload a CSV first.';
         $_SESSION['flash_type']    = 'error';
         header("Location: import.php");
@@ -98,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 
         mysqli_stmt_close($stmt_ins);
         mysqli_commit($conn);
-        unset($_SESSION['import_preview_courses']);
+        unset($_SESSION['admin_import_preview_courses'], $_SESSION['admin_import_dept_courses']);
         $_SESSION['flash_message'] = "$inserted course(s) imported successfully.";
         $_SESSION['flash_type']    = 'success';
         header("Location: import.php?done=1");
@@ -116,16 +122,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 /* -----------------------------------------------------------------------
  * Step 2 — Parse & preview CSV
  * --------------------------------------------------------------------- */
-$preview_rows = [];
-$valid_count  = 0;
-$error_count  = 0;
-$parse_errors = [];
+$preview_rows      = [];
+$valid_count       = 0;
+$error_count       = 0;
+$parse_errors      = [];
+$selected_dept_id  = 0;
+$selected_dept_name = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confirm') {
-    $rows = [];
+    $rows        = [];
+    $departments = get_departments_map($conn);
+
     if (!validate_csrf_token()) {
         $parse_errors[] = 'Invalid security token.';
     } else {
+        $selected_dept_id = (int) ($_POST['department_id'] ?? 0);
+        if ($selected_dept_id <= 0 || !isset($departments[$selected_dept_id])) {
+            $parse_errors[] = 'Please select a valid department.';
+        } else {
+            $selected_dept_name = $departments[$selected_dept_id];
+        }
+
         try {
             $rows = import_read_upload('import_file');
         } catch (Throwable $e) {
@@ -157,8 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     $row_errors[] = 'Course code is required';
                 } elseif (isset($seen_codes[$course_code])) {
                     $row_errors[] = 'Duplicate course code in this file';
-                } elseif (course_code_exists($conn, $course_code, $department_id)) {
-                    $row_errors[] = 'Course code already exists in your department';
+                } elseif (course_code_exists($conn, $course_code, $selected_dept_id)) {
+                    $row_errors[] = 'Course code already exists in the selected department';
                 }
 
                 if ($course_name === '') $row_errors[] = 'Course name is required';
@@ -203,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
             if (empty($preview_rows)) {
                 $parse_errors[] = 'The file contains no data rows.';
             } else {
-                $_SESSION['import_preview_courses'] = array_values(array_filter(
+                $_SESSION['admin_import_preview_courses'] = array_values(array_filter(
                     array_map(function($r) { return $r['valid'] ? [
                         'course_code'  => $r['course_code'],
                         'course_name'  => $r['course_name'],
@@ -212,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                         'credit_hours' => $r['credit_hours'],
                     ] : null; }, $preview_rows)
                 ));
+                $_SESSION['admin_import_dept_courses'] = $selected_dept_id;
             }
         }
     }
@@ -283,6 +301,9 @@ tr.row-error{border-left:3px solid #dc3545}
 <div class="card">
     <p class="card-title">Import Preview</p>
     <p class="card-subtitle">Review before confirming. Only valid rows will be imported.</p>
+    <?php if ($selected_dept_name !== ''): ?>
+    <div class="alert alert-info">Courses will be added to department: <strong><?php echo htmlspecialchars($selected_dept_name); ?></strong></div>
+    <?php endif; ?>
     <div class="stats-bar">
         <span class="stat-chip stat-total">Total: <?php echo count($preview_rows); ?></span>
         <span class="stat-chip stat-valid">Valid: <?php echo $valid_count; ?></span>
@@ -350,7 +371,7 @@ tr.row-error{border-left:3px solid #dc3545}
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
-            <li><code>course_code</code> must be unique within your department.</li>
+            <li><code>course_code</code> must be unique within the selected department.</li>
             <li><code>level_id</code> and <code>semester_id</code> must match valid IDs — see the reference tables below.</li>
             <li><code>credit_hours</code> must be between 1 and 6.</li>
         </ul>
@@ -388,6 +409,15 @@ tr.row-error{border-left:3px solid #dc3545}
 
     <form method="POST" enctype="multipart/form-data">
         <?php csrf_token_input(); ?>
+        <div class="form-group">
+            <label class="form-label" for="department_id">Target Department</label>
+            <select name="department_id" id="department_id" class="form-input" required>
+                <option value="">-- Select a department --</option>
+                <?php foreach (get_departments_map($conn) as $id => $name): ?>
+                <option value="<?php echo $id; ?>"<?php echo ($selected_dept_id === $id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($name); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
         <div class="form-group">
             <label class="form-label" for="import_file">Select CSV or Excel File</label>
             <input type="file" name="import_file" id="import_file" class="form-input" accept=".csv,.xlsx" required>
