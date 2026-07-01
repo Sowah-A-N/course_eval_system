@@ -587,6 +587,9 @@ error_reporting(0);
  *
  * [ ] Set APP_URL env var to production URL (Apache: SetEnv APP_URL https://yourdomain.com)
  * [ ] Set DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME env vars on the server
+ * [ ] For reliable email, set SMTP env vars (else PHP mail() is used):
+ *        SMTP_HOST, SMTP_PORT (587), SMTP_USER, SMTP_PASS,
+ *        SMTP_SECURE (tls|ssl|none), SMTP_FROM  — see includes/mailer.php
  * [ ] Set MAINTENANCE_MODE to FALSE (unless deploying in maintenance window)
  * [ ] Update INSTITUTION_NAME and ADMIN_EMAIL if needed
  * [ ] Verify timezone is correct
