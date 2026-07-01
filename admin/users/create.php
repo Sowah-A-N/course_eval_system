@@ -9,6 +9,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/audit.php';
 require_once '../../includes/user_helpers.php';
+require_once '../../includes/mailer.php';
 
 start_secure_session();
 check_login();
@@ -100,11 +101,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new_id = mysqli_insert_id($conn);
             log_audit($conn, $_SESSION['user_id'], AUDIT_USER_CREATE, 'user_details', $new_id, null,
                 ['username' => $username, 'email' => $email, 'role_id' => $role_id]);
+            // Email the new user their login details (best-effort).
+            $emailed = ces_send_login_details($email, "$f_name $l_name", $username, $temp_password);
             $_SESSION['new_user_creds'] = [
                 'name'     => "$f_name $l_name",
                 'username' => $username,
                 'password' => $temp_password,
                 'role'     => ROLE_NAMES[$role_id] ?? 'User',
+                'emailed'  => $emailed,
                 'continue' => ($action === 'create_another'),
             ];
             header("Location: create.php?created=1");
@@ -152,6 +156,9 @@ require_once '../../includes/header.php';
 <div class="creds-card">
     <h2>✅ <?php echo htmlspecialchars($show_creds['role']); ?> Account Created</h2>
     <p>Share these login credentials with <strong><?php echo htmlspecialchars($show_creds['name']); ?></strong>. They will be required to change their password on first login.</p>
+    <?php if (!empty($show_creds['emailed'])): ?>
+    <p style="color:#166534;font-size:14px">📧 A copy of these login details has been emailed to the user.</p>
+    <?php endif; ?>
     <table class="creds-table">
         <tr>
             <td>Username</td>

@@ -12,6 +12,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/user_helpers.php';
 require_once '../../includes/import_helpers.php';
+require_once '../../includes/mailer.php';
 
 start_secure_session();
 check_login();
@@ -181,8 +182,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 
         mysqli_stmt_close($stmt_ins);
         mysqli_commit($conn);
+
+        // Email each new student their login details (best-effort — the
+        // credentials are also shown on screen in case mail is unavailable).
+        $emailed = 0;
+        foreach ($credentials as $c) {
+            if (ces_send_login_details($c['email'], $c['name'], $c['username'], $c['password'])) $emailed++;
+        }
+
         unset($_SESSION['admin_import_preview_students'], $_SESSION['admin_import_dept_students']);
         $_SESSION['admin_import_students_credentials'] = $credentials;
+        $_SESSION['admin_import_students_emailed']     = $emailed;
         header("Location: import_students.php?done=1");
         exit();
 
@@ -338,9 +348,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
  * Step 4 — Results (?done=1)
  * --------------------------------------------------------------------- */
 $import_credentials = null;
+$import_emailed     = 0;
 if (isset($_GET['done']) && !empty($_SESSION['admin_import_students_credentials'])) {
     $import_credentials = $_SESSION['admin_import_students_credentials'];
-    unset($_SESSION['admin_import_students_credentials']);
+    $import_emailed     = (int) ($_SESSION['admin_import_students_emailed'] ?? 0);
+    unset($_SESSION['admin_import_students_credentials'], $_SESSION['admin_import_students_emailed']);
 }
 
 $page_title = 'Bulk Student Import';
@@ -410,6 +422,7 @@ tr.row-error{border-left:3px solid #dc3545}
 <div class="creds-card">
     <h2>Import Successful</h2>
     <p><?php echo count($import_credentials); ?> student account(s) created. Every student was given the default password <code><?php echo htmlspecialchars(DEFAULT_IMPORT_PASSWORD); ?></code> and must change it on first login.</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#166534">📧 Login details emailed to <strong><?php echo (int)$import_emailed; ?></strong> of <?php echo count($import_credentials); ?> student(s).</p>
     <p class="warn-note">Share each student's <strong>username</strong> along with the default password above so they can sign in.</p>
     <div class="table-wrap" id="creds-table-wrap">
         <table id="creds-table">

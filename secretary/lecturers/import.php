@@ -8,6 +8,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/user_helpers.php';
 require_once '../../includes/import_helpers.php';
+require_once '../../includes/mailer.php';
 
 start_secure_session();
 check_login();
@@ -98,9 +99,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 
         mysqli_stmt_close($stmt_ins);
         mysqli_commit($conn);
+
+        // Email each new lecturer their login details (best-effort — the
+        // credentials are also shown on screen in case mail is unavailable).
+        $emailed = 0;
+        foreach ($credentials as $c) {
+            if (ces_send_login_details($c['email'], $c['name'], $c['username'], $c['password'])) $emailed++;
+        }
+
         unset($_SESSION['import_preview_lecturers']);
 
         $_SESSION['lecturer_import_credentials'] = $credentials;
+        $_SESSION['lecturer_import_emailed']     = $emailed;
         header("Location: import.php?done=1");
         exit();
 
@@ -195,9 +205,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
  * Retrieve credentials after redirect
  * --------------------------------------------------------------------- */
 $imported_credentials = null;
+$imported_emailed     = 0;
 if (isset($_GET['done']) && !empty($_SESSION['lecturer_import_credentials'])) {
     $imported_credentials = $_SESSION['lecturer_import_credentials'];
-    unset($_SESSION['lecturer_import_credentials']);
+    $imported_emailed     = (int)($_SESSION['lecturer_import_emailed'] ?? 0);
+    unset($_SESSION['lecturer_import_credentials'], $_SESSION['lecturer_import_emailed']);
 }
 
 $page_title = 'Bulk Lecturer Import';
@@ -258,6 +270,7 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <div class="card">
     <p class="card-title">Generated Credentials</p>
+    <p style="margin:0 0 12px;font-size:14px;color:#166534">📧 Login details emailed to <strong><?php echo (int)$imported_emailed; ?></strong> of <?php echo count($imported_credentials); ?> lecturer(s).</p>
     <div class="cred-warning">
         <strong>Important:</strong> Every lecturer was given the default password <code><?php echo htmlspecialchars(DEFAULT_IMPORT_PASSWORD); ?></code>
         and will be prompted to change it on first login. Share each lecturer's username with them.

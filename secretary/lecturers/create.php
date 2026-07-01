@@ -8,6 +8,7 @@ require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/user_helpers.php';
+require_once '../../includes/mailer.php';
 
 start_secure_session();
 check_login();
@@ -69,10 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role, $department_id, $is_active);
 
         if (mysqli_stmt_execute($stmt)) {
+            // Email the new lecturer their login details (best-effort).
+            $emailed = ces_send_login_details($email, "$f_name $l_name", $username, $temp_password);
             $_SESSION['new_lecturer_creds'] = [
                 'name'     => "$f_name $l_name",
                 'username' => $username,
                 'password' => $temp_password,
+                'emailed'  => $emailed,
                 'continue' => ($action === 'create_another'),
             ];
             header("Location: create.php?created=1");
@@ -119,6 +123,9 @@ require_once '../../includes/header.php';
 <div class="creds-card">
     <h2>✅ Lecturer Account Created</h2>
     <p>Share these login credentials with <strong><?php echo htmlspecialchars($show_creds['name']); ?></strong>. They will be required to change their password on first login.</p>
+    <?php if (!empty($show_creds['emailed'])): ?>
+    <p style="color:#166534;font-size:14px">📧 A copy of these login details has been emailed to the lecturer.</p>
+    <?php endif; ?>
     <table class="creds-table">
         <tr>
             <td>Username</td>
