@@ -16,7 +16,8 @@ config/database.php
 !.env.example
 
 # ── Dependencies ─────────────────────────────────────────────────────────────
-/vendor/
+# vendor/ is intentionally committed: production is shared hosting with no
+# Composer, so the PHPMailer library must ship with the code.
 
 # ── Database dumps ───────────────────────────────────────────────────────────
 *.sql
