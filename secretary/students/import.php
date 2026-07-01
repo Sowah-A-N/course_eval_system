@@ -20,6 +20,9 @@ if ($_SESSION['role_id'] !== ROLE_SECRETARY) {
 
 $department_id = (int) $_SESSION['department_id'];
 
+/** Default password given to every imported student (they must change it on first login). */
+const DEFAULT_STUDENT_PASSWORD = 'password246';
+
 /* -----------------------------------------------------------------------
  * Step 0 — Template download
  * --------------------------------------------------------------------- */
@@ -86,6 +89,121 @@ function generate_unique_student_id(mysqli $conn): string {
 }
 
 /* -----------------------------------------------------------------------
+ * File readers — CSV and Excel (.xlsx) both produce the same shape:
+ * an array of rows, each row a 0-indexed array of trimmed cell strings.
+ * --------------------------------------------------------------------- */
+
+/** Read a CSV file into an array of rows. */
+function parse_csv_file(string $path): array {
+    $rows = [];
+    $handle = fopen($path, 'r');
+    if ($handle === false) {
+        throw new RuntimeException('Could not open the CSV file.');
+    }
+    while (($r = fgetcsv($handle)) !== false) {
+        $rows[] = array_map(function ($v) { return trim((string) $v); }, $r);
+    }
+    fclose($handle);
+    return $rows;
+}
+
+/** Convert an Excel column reference ("A", "B", "AA") to a 0-based index. */
+function xlsx_col_index(string $ref): int {
+    if (!preg_match('/^([A-Za-z]+)/', $ref, $m)) return -1;
+    $letters = strtoupper($m[1]);
+    $n = 0;
+    for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
+        $n = $n * 26 + (ord($letters[$i]) - 64);
+    }
+    return $n - 1;
+}
+
+/** Extract text from a sharedStrings <si> element (handles rich-text runs). */
+function xlsx_si_text(SimpleXMLElement $si): string {
+    if (isset($si->t)) return (string) $si->t;
+    $text = '';
+    if (isset($si->r)) {
+        foreach ($si->r as $r) $text .= (string) $r->t;
+    }
+    return $text;
+}
+
+/**
+ * Read an .xlsx file into an array of rows using only ZipArchive + SimpleXML
+ * (an .xlsx file is a ZIP of XML parts — no external library needed).
+ */
+function parse_xlsx_file(string $path): array {
+    if (!class_exists('ZipArchive')) {
+        throw new RuntimeException('Excel import is not available on this server. Please save your file as CSV and upload that instead.');
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        throw new RuntimeException('Could not open the Excel file — it may be corrupted.');
+    }
+
+    // Shared strings table (text cells reference entries here).
+    $shared = [];
+    $ssXml = $zip->getFromName('xl/sharedStrings.xml');
+    if ($ssXml !== false) {
+        $sx = simplexml_load_string($ssXml);
+        if ($sx !== false) {
+            foreach ($sx->si as $si) $shared[] = xlsx_si_text($si);
+        }
+    }
+
+    // Worksheet XML (first sheet).
+    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    if ($sheetXml === false) {
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name)) {
+                $sheetXml = $zip->getFromName($name);
+                break;
+            }
+        }
+    }
+    $zip->close();
+
+    if ($sheetXml === false) {
+        throw new RuntimeException('Could not find a worksheet inside the Excel file.');
+    }
+    $sheet = simplexml_load_string($sheetXml);
+    if ($sheet === false) {
+        throw new RuntimeException('Could not read the Excel worksheet.');
+    }
+
+    $rows = [];
+    foreach ($sheet->sheetData->row as $row) {
+        $cells   = [];
+        $max_col = -1;
+        $auto    = 0; // fallback position when a cell omits its "r" reference
+        foreach ($row->c as $c) {
+            $ref = (string) $c['r'];
+            $col = $ref !== '' ? xlsx_col_index($ref) : $auto;
+            if ($col < 0) $col = $auto;
+            $auto = $col + 1;
+
+            $type = (string) $c['t'];
+            if ($type === 's') {
+                $val = $shared[(int) $c->v] ?? '';
+            } elseif ($type === 'inlineStr') {
+                $val = (string) $c->is->t;
+            } else {
+                $val = (string) $c->v; // number, boolean, or literal string
+            }
+            $cells[$col] = $val;
+            if ($col > $max_col) $max_col = $col;
+        }
+        $dense = [];
+        for ($i = 0; $i <= $max_col; $i++) {
+            $dense[$i] = isset($cells[$i]) ? trim((string) $cells[$i]) : '';
+        }
+        $rows[] = $dense;
+    }
+    return $rows;
+}
+
+/* -----------------------------------------------------------------------
  * Step 3 — Confirm import
  * --------------------------------------------------------------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm') {
@@ -107,6 +225,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
     $role_student = ROLE_STUDENT;
     $credentials  = [];
 
+    // Every imported student gets the same default password. It is hashed once
+    // (bcrypt is deliberately slow, so we avoid re-hashing per row) and each
+    // student is flagged to change it on first login.
+    $password_hash = password_hash(DEFAULT_STUDENT_PASSWORD, PASSWORD_DEFAULT);
+
     mysqli_begin_transaction($conn);
     try {
         $stmt_ins = mysqli_prepare($conn,
@@ -117,10 +240,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         );
 
         foreach ($preview as $row) {
-            $unique_id     = generate_unique_student_id($conn);
-            $username      = ces_derive_username($conn, $row['f_name'], $row['l_name']);
-            $temp_password = ces_generate_temp_password();
-            $password_hash = password_hash($temp_password, PASSWORD_DEFAULT);
+            $unique_id = generate_unique_student_id($conn);
+            $username  = ces_derive_username($conn, $row['f_name'], $row['l_name']);
 
             mysqli_stmt_bind_param($stmt_ins, "ssssssiiii",
                 $username,
@@ -143,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
                 'name'     => $row['f_name'] . ' ' . $row['l_name'],
                 'email'    => $row['email'],
                 'username' => $username,
-                'password' => $temp_password,
+                'password' => DEFAULT_STUDENT_PASSWORD,
             ];
         }
 
@@ -164,7 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 }
 
 /* -----------------------------------------------------------------------
- * Step 2 — Parse & preview CSV
+ * Step 2 — Parse & preview (CSV or Excel .xlsx)
  * --------------------------------------------------------------------- */
 $preview_rows = [];
 $valid_count  = 0;
@@ -174,46 +295,66 @@ $parse_errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confirm') {
     if (!validate_csrf_token()) {
         $parse_errors[] = 'Invalid security token.';
-    } elseif (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
-        $parse_errors[] = 'Please select a valid CSV file to upload.';
+    } elseif (!isset($_FILES['import_file']) || $_FILES['import_file']['error'] !== UPLOAD_ERR_OK) {
+        $parse_errors[] = 'Please select a valid CSV or Excel file to upload.';
     } else {
-        $file = $_FILES['csv_file']['tmp_name'];
-        $ext  = strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION));
-        $mime = mime_content_type($file);
-        $allowed_mime = ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'];
-        if (!in_array($mime, $allowed_mime, true) && $ext !== 'csv') {
-            $parse_errors[] = 'File must be a CSV file.';
-        } else {
+        $file = $_FILES['import_file']['tmp_name'];
+        $ext  = strtolower(pathinfo($_FILES['import_file']['name'], PATHINFO_EXTENSION));
+
+        // Read the whole file into a uniform array of rows, whatever the format.
+        $rows = [];
+        try {
+            if ($ext === 'csv') {
+                $rows = parse_csv_file($file);
+            } elseif ($ext === 'xlsx') {
+                $rows = parse_xlsx_file($file);
+            } elseif ($ext === 'xls') {
+                $parse_errors[] = 'The old Excel .xls format is not supported. Please save the file as .xlsx or CSV and try again.';
+            } else {
+                $parse_errors[] = 'File must be a CSV (.csv) or Excel (.xlsx) file.';
+            }
+        } catch (Throwable $e) {
+            $parse_errors[] = $e->getMessage();
+        }
+
+        if (empty($parse_errors) && empty($rows)) {
+            $parse_errors[] = 'The file appears to be empty.';
+        }
+
+        if (empty($parse_errors)) {
             $level_map = get_levels_by_number($conn);
             $class_map = get_classes_by_code($conn, $department_id);
 
-            $handle = fopen($file, 'r');
-            $header = fgetcsv($handle);
-            if ($header !== false) {
-                $header_lower = array_map('strtolower', array_map('trim', $header));
-                $missing = array_diff(['first_name', 'last_name', 'email', 'level', 'class'], $header_lower);
-                if (!empty($missing)) $parse_errors[] = 'CSV is missing required columns: ' . implode(', ', $missing);
+            // Map header names to column positions so column ORDER doesn't matter.
+            $header_lower = array_map('strtolower', array_map('trim', $rows[0]));
+            $required = ['first_name', 'last_name', 'email', 'level', 'class'];
+            $missing  = array_diff($required, $header_lower);
+            if (!empty($missing)) {
+                $parse_errors[] = 'File is missing required columns: ' . implode(', ', $missing);
             } else {
-                $parse_errors[] = 'Could not read the CSV file.';
-            }
-
-            if (empty($parse_errors)) {
+                $col = array_flip($header_lower);
                 $seen_emails = [];
-                $row_num     = 1;
+                $total = count($rows);
 
-                while (($csv_row = fgetcsv($handle)) !== false) {
-                    $row_num++;
-                    if (count(array_filter(array_map('trim', $csv_row))) === 0) continue;
+                for ($i = 1; $i < $total; $i++) {
+                    $cells = $rows[$i];
+                    if (count(array_filter(array_map('trim', $cells))) === 0) continue; // skip blank rows
 
-                    [$f_name, $l_name, $email, $level_raw, $class_raw] =
-                        array_pad(array_map('trim', $csv_row), 5, '');
+                    $get = function ($name) use ($cells, $col) {
+                        return (isset($col[$name]) && isset($cells[$col[$name]])) ? trim((string) $cells[$col[$name]]) : '';
+                    };
+
+                    $f_name    = $get('first_name');
+                    $l_name    = $get('last_name');
+                    $email     = strtolower($get('email'));
+                    $level_raw = $get('level');
+                    $class_raw = $get('class');
 
                     $row_errors = [];
 
                     if ($f_name === '') $row_errors[] = 'First name is required';
                     if ($l_name === '') $row_errors[] = 'Last name is required';
 
-                    $email = strtolower($email);
                     if ($email === '') {
                         $row_errors[] = 'Email is required';
                     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -225,8 +366,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     }
 
                     // Level: expect 100, 200, 300, 400 etc.
-                    $level_num = filter_var($level_raw, FILTER_VALIDATE_INT);
-                    $level_id  = null;
+                    $level_num  = filter_var($level_raw, FILTER_VALIDATE_INT);
+                    $level_id   = null;
                     $level_name = '';
                     if ($level_num === false || $level_num <= 0) {
                         $row_errors[] = 'Level must be a number like 100, 200, 300 or 400';
@@ -256,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     else $error_count++;
 
                     $preview_rows[] = [
-                        'row'        => $row_num,
+                        'row'        => $i + 1,
                         'f_name'     => $f_name,
                         'l_name'     => $l_name,
                         'email'      => $email,
@@ -270,10 +411,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                         'errors'     => $row_errors,
                     ];
                 }
-                fclose($handle);
 
                 if (empty($preview_rows)) {
-                    $parse_errors[] = 'The CSV file contains no data rows.';
+                    $parse_errors[] = 'The file contains no data rows.';
                 } else {
                     $_SESSION['import_preview'] = array_values(array_filter(
                         array_map(function($r) { return $r['valid'] ? [
@@ -285,8 +425,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                         ] : null; }, $preview_rows)
                     ));
                 }
-            } else {
-                fclose($handle);
             }
         }
     }
@@ -351,7 +489,7 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <div class="page-header">
     <h1>Bulk Student Import</h1>
-    <p>Upload a CSV file to enroll multiple students at once</p>
+    <p>Upload a CSV or Excel file to enroll multiple students at once</p>
 </div>
 
 <div class="import-container">
@@ -366,12 +504,12 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <div class="creds-card">
     <h2>Import Successful</h2>
-    <p><?php echo count($import_credentials); ?> student account(s) created. Share credentials below. Students must change their password on first login.</p>
-    <p class="warn-note">These credentials are shown <strong>once only</strong>. Download or copy them now.</p>
+    <p><?php echo count($import_credentials); ?> student account(s) created. Every student was given the default password <code><?php echo htmlspecialchars(DEFAULT_STUDENT_PASSWORD); ?></code> and must change it on first login.</p>
+    <p class="warn-note">Share each student's <strong>username</strong> along with the default password above so they can sign in.</p>
     <div class="table-wrap" id="creds-table-wrap">
         <table id="creds-table">
             <thead>
-                <tr><th>#</th><th>Name</th><th>Email</th><th>Username</th><th>Temp Password</th></tr>
+                <tr><th>#</th><th>Name</th><th>Email</th><th>Username</th><th>Default Password</th></tr>
             </thead>
             <tbody>
                 <?php foreach ($import_credentials as $i => $c): ?>
@@ -491,20 +629,22 @@ tr.row-error{border-left:3px solid #dc3545}
 <?php endif; ?>
 
 <div class="card">
-    <p class="card-title">Upload CSV File</p>
-    <p class="card-subtitle">Import multiple students by uploading a correctly formatted CSV file. Student IDs, usernames, and passwords are assigned automatically.</p>
+    <p class="card-title">Upload CSV or Excel File</p>
+    <p class="card-subtitle">Import multiple students by uploading a correctly formatted CSV (.csv) or Excel (.xlsx) file. Student IDs and usernames are assigned automatically.</p>
 
     <div class="template-hint">
-        <strong>Required columns (in order):</strong>
+        <strong>Required columns:</strong>
         <code>first_name</code>, <code>last_name</code>, <code>email</code>,
         <code>level</code>, <code>class</code>
+        <span style="color:#888">(any order — matched by column heading)</span>
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
             <li><code>level</code> — enter the level as a number: <strong>100, 200, 300</strong> or <strong>400</strong></li>
             <li><code>class</code> — enter the class code exactly as shown, e.g. <strong>BIT28</strong></li>
             <li>Each email must be unique and not already registered.</li>
-            <li>Student IDs, usernames, and temporary passwords are assigned automatically.</li>
+            <li>Every student is given the default password <code><?php echo htmlspecialchars(DEFAULT_STUDENT_PASSWORD); ?></code> and must change it on first login.</li>
+            <li>Accepted files: <strong>.csv</strong> and <strong>.xlsx</strong> (save old <code>.xls</code> files as <code>.xlsx</code> first).</li>
         </ul>
         <br>
         <a href="import.php?action=template" class="btn btn-outline btn-sm">Download CSV Template</a>
@@ -531,8 +671,8 @@ tr.row-error{border-left:3px solid #dc3545}
     <form method="POST" enctype="multipart/form-data">
         <?php csrf_token_input(); ?>
         <div class="form-group">
-            <label class="form-label" for="csv_file">Select CSV File</label>
-            <input type="file" name="csv_file" id="csv_file" class="form-input" accept=".csv,text/csv" required>
+            <label class="form-label" for="import_file">Select CSV or Excel File</label>
+            <input type="file" name="import_file" id="import_file" class="form-input" accept=".csv,.xlsx" required>
         </div>
         <button type="submit" class="btn btn-primary">Upload &amp; Preview</button>
         <a href="list.php" class="btn btn-secondary">Cancel</a>
