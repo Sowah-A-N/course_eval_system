@@ -9,7 +9,7 @@
  *   - Otherwise PHPMailer uses PHP's mail().
  *   - If the PHPMailer library is somehow missing, it falls back to raw mail().
  *
- * Best-effort: every function returns a boolean and never throws, so a mail
+ * Best-effort: every function returns a boolean/int and never throws, so a mail
  * failure never blocks account creation (credentials are also shown on screen).
  *
  * SMTP is configured with environment variables (set on the server, no code
@@ -63,16 +63,11 @@ function ces_absolute_base_url(): string {
 }
 
 /**
- * Email a newly created user their login details.
+ * Build the subject + plain-text body for the "account created" email.
  *
- * @return bool true if the message was accepted for delivery, false otherwise
+ * @return array{0:string,1:string} [subject, body]
  */
-function ces_send_login_details(string $to_email, string $full_name, string $username, string $password): bool {
-    $to_email = trim($to_email);
-    if ($to_email === '' || !filter_var($to_email, FILTER_VALIDATE_EMAIL)) {
-        return false;
-    }
-
+function ces_login_email_content(string $to_email, string $full_name, string $username, string $password): array {
     $app       = defined('APP_NAME') ? APP_NAME : 'Course Evaluation System';
     $inst      = defined('INSTITUTION_NAME') ? INSTITUTION_NAME : $app;
     $login_url = ces_absolute_base_url() . '/login.php';
@@ -90,7 +85,74 @@ function ces_send_login_details(string $to_email, string $full_name, string $use
     $body .= "If you did not expect this email, please contact your administrator.\n\n";
     $body .= '— ' . $inst;
 
-    return ces_deliver_mail($to_email, $to_email, $subject, $body);
+    return [$subject, $body];
+}
+
+/**
+ * Email a single newly created user their login details.
+ *
+ * @return bool true if the message was accepted for delivery, false otherwise
+ */
+function ces_send_login_details(string $to_email, string $full_name, string $username, string $password): bool {
+    $to_email = trim($to_email);
+    if ($to_email === '' || !filter_var($to_email, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    list($subject, $body) = ces_login_email_content($to_email, $full_name, $username, $password);
+    // Use the person's real name as the recipient display name.
+    return ces_deliver_mail($to_email, $full_name !== '' ? $full_name : $to_email, $subject, $body);
+}
+
+/**
+ * Email a batch of newly created users their login details, reusing a SINGLE
+ * SMTP connection for the whole batch (avoids one connect/auth handshake per
+ * recipient, which is slow and can time out on large imports).
+ *
+ * @param array $users  list of ['email'=>, 'name'=>, 'username'=>, 'password'=>]
+ * @return int          how many emails were accepted for delivery
+ */
+function ces_send_login_details_batch(array $users): int {
+    if (empty($users)) {
+        return 0;
+    }
+
+    // No library available → per-message raw mail() (no shared connection possible).
+    if (!class_exists(PHPMailer::class)) {
+        $sent = 0;
+        foreach ($users as $u) {
+            $to = trim((string) ($u['email'] ?? ''));
+            if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) continue;
+            list($subject, $body) = ces_login_email_content($to, (string) ($u['name'] ?? ''), (string) ($u['username'] ?? ''), (string) ($u['password'] ?? ''));
+            if (ces_raw_mail($to, $subject, $body)) $sent++;
+        }
+        return $sent;
+    }
+
+    $sent = 0;
+    $mail = new PHPMailer(false); // exceptions off — we check the boolean return
+    try {
+        ces_configure_mailer($mail, true); // keep the SMTP connection open across sends
+        foreach ($users as $u) {
+            $to = trim((string) ($u['email'] ?? ''));
+            if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) continue;
+            $name = (string) ($u['name'] ?? '');
+            list($subject, $body) = ces_login_email_content($to, $name, (string) ($u['username'] ?? ''), (string) ($u['password'] ?? ''));
+            try {
+                $mail->clearAllRecipients();
+                $mail->addAddress($to, $name !== '' ? $name : $to);
+                $mail->Subject = $subject;
+                $mail->Body    = $body;
+                if ($mail->send()) $sent++;
+            } catch (\Throwable $e) {
+                ces_log_mail_error($e, $mail); // one bad recipient shouldn't abort the batch
+            }
+        }
+    } catch (\Throwable $e) {
+        ces_log_mail_error($e, $mail);
+    } finally {
+        try { $mail->smtpClose(); } catch (\Throwable $e) { /* ignore */ }
+    }
+    return $sent;
 }
 
 /**
@@ -110,63 +172,85 @@ function ces_mail_from(): array {
 }
 
 /**
- * Deliver a plain-text email via PHPMailer (SMTP if configured, else PHP mail()).
- * Returns true only if the message was accepted for delivery.
+ * Apply transport (SMTP vs PHP mail()), sender and format settings to a
+ * PHPMailer instance. Shared by single and batch senders.
+ *
+ * @param bool $keepAlive keep the SMTP connection open between sends (batch mode)
+ */
+function ces_configure_mailer(PHPMailer $mail, bool $keepAlive = false): void {
+    $mail->CharSet = 'UTF-8';
+
+    $smtp_host = getenv('SMTP_HOST');
+    if ($smtp_host !== false && trim($smtp_host) !== '') {
+        $mail->isSMTP();
+        $mail->Host         = trim($smtp_host);
+        $mail->Port         = (int) (getenv('SMTP_PORT') ?: 587);
+        $mail->Timeout      = 15;
+        $mail->SMTPKeepAlive = $keepAlive;
+
+        $user = getenv('SMTP_USER');
+        if ($user !== false && trim($user) !== '') {
+            $mail->SMTPAuth = true;
+            $mail->Username = trim($user);
+            $mail->Password = (string) getenv('SMTP_PASS');
+        }
+
+        $secure = strtolower((string) (getenv('SMTP_SECURE') ?: 'tls'));
+        if ($secure === 'ssl') {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        } elseif ($secure === 'none') {
+            $mail->SMTPSecure  = '';
+            $mail->SMTPAutoTLS = false;
+        } else {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+    } else {
+        $mail->isMail(); // PHP mail()
+    }
+
+    list($from_addr, $from_name) = ces_mail_from();
+    $mail->setFrom($from_addr, $from_name);
+    $mail->addReplyTo($from_addr);
+    $mail->isHTML(false);
+}
+
+/**
+ * Deliver a single plain-text email via PHPMailer (SMTP if configured, else
+ * PHP mail()). Returns true only if the message was accepted for delivery.
  */
 function ces_deliver_mail(string $to, string $to_name, string $subject, string $body): bool {
-    list($from_addr, $from_name) = ces_mail_from();
-
-    // Fallback if the PHPMailer library is not present (e.g. vendor/ not deployed).
     if (!class_exists(PHPMailer::class)) {
-        $headers  = 'From: ' . str_replace(["\r", "\n"], '', $from_name) . ' <' . str_replace(["\r", "\n"], '', $from_addr) . ">\r\n";
-        $headers .= 'Reply-To: ' . str_replace(["\r", "\n"], '', $from_addr) . "\r\n";
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        $headers .= 'X-Mailer: PHP/' . phpversion();
-        return @mail(str_replace(["\r", "\n"], '', $to), str_replace(["\r", "\n"], '', $subject), $body, $headers);
+        return ces_raw_mail($to, $subject, $body);
     }
 
     $mail = new PHPMailer(false); // exceptions off — we check the boolean return
     try {
-        $mail->CharSet = 'UTF-8';
-
-        $smtp_host = getenv('SMTP_HOST');
-        if ($smtp_host !== false && trim($smtp_host) !== '') {
-            $mail->isSMTP();
-            $mail->Host    = trim($smtp_host);
-            $mail->Port    = (int) (getenv('SMTP_PORT') ?: 587);
-            $mail->Timeout = 15;
-
-            $user = getenv('SMTP_USER');
-            if ($user !== false && trim($user) !== '') {
-                $mail->SMTPAuth = true;
-                $mail->Username = trim($user);
-                $mail->Password = (string) getenv('SMTP_PASS');
-            }
-
-            $secure = strtolower((string) (getenv('SMTP_SECURE') ?: 'tls'));
-            if ($secure === 'ssl') {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-            } elseif ($secure === 'none') {
-                $mail->SMTPSecure  = '';
-                $mail->SMTPAutoTLS = false;
-            } else {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            }
-        } else {
-            $mail->isMail(); // PHP mail()
-        }
-
-        $mail->setFrom($from_addr, $from_name);
-        $mail->addReplyTo($from_addr);
+        ces_configure_mailer($mail, false);
         $mail->addAddress($to, $to_name);
-        $mail->isHTML(false);
         $mail->Subject = $subject;
         $mail->Body    = $body;
-
         return $mail->send();
     } catch (\Throwable $e) {
-        error_log('[CES][mail] ' . $e->getMessage()
-            . (isset($mail->ErrorInfo) && $mail->ErrorInfo !== '' ? ' | ' . $mail->ErrorInfo : ''));
+        ces_log_mail_error($e, $mail);
         return false;
     }
+}
+
+/**
+ * Last-resort raw mail() sender used only when the PHPMailer library is absent.
+ * Strips CR/LF from header-bound fields to prevent header injection.
+ */
+function ces_raw_mail(string $to, string $subject, string $body): bool {
+    list($from_addr, $from_name) = ces_mail_from();
+    $headers  = 'From: ' . str_replace(["\r", "\n"], '', $from_name) . ' <' . str_replace(["\r", "\n"], '', $from_addr) . ">\r\n";
+    $headers .= 'Reply-To: ' . str_replace(["\r", "\n"], '', $from_addr) . "\r\n";
+    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $headers .= 'X-Mailer: PHP/' . phpversion();
+    return @mail(str_replace(["\r", "\n"], '', $to), str_replace(["\r", "\n"], '', $subject), $body, $headers);
+}
+
+/** Log a mail error to the PHP error log, including PHPMailer's ErrorInfo when present. */
+function ces_log_mail_error(\Throwable $e, $mail = null): void {
+    $info = ($mail !== null && isset($mail->ErrorInfo) && $mail->ErrorInfo !== '') ? ' | ' . $mail->ErrorInfo : '';
+    error_log('[CES][mail] ' . $e->getMessage() . $info);
 }

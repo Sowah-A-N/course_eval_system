@@ -144,10 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
 
         // Email each new lecturer their login details (best-effort — the
         // credentials are also shown on screen in case mail is unavailable).
-        $emailed = 0;
-        foreach ($credentials as $c) {
-            if (ces_send_login_details($c['email'], $c['name'], $c['username'], $c['password'])) $emailed++;
-        }
+        $emailed = ces_send_login_details_batch($credentials);
 
         unset($_SESSION['admin_import_preview_lecturers'], $_SESSION['admin_import_dept_lecturers']);
 
