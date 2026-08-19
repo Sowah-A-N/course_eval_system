@@ -248,8 +248,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         try {
             // Lock token row inside transaction to prevent concurrent double-submissions
             $stmt_lock = mysqli_prepare($conn, "SELECT is_used FROM evaluation_tokens WHERE token=? FOR UPDATE");
+            if (!$stmt_lock) { throw new RuntimeException('Failed to prepare token lock.'); }
             mysqli_stmt_bind_param($stmt_lock, "s", $token_data['token']);
-            mysqli_stmt_execute($stmt_lock);
+            if (!mysqli_stmt_execute($stmt_lock)) { throw new RuntimeException('Failed to lock token row.'); }
             $lock_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_lock));
             mysqli_stmt_close($stmt_lock);
             if (!$lock_row || $lock_row['is_used'] == 1) {
@@ -271,6 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ";
 
             $stmt_eval = mysqli_prepare($conn, $query_insert_eval);
+            if (!$stmt_eval) { throw new RuntimeException('Failed to prepare evaluation insert.'); }
             mysqli_stmt_bind_param(
                 $stmt_eval,
                 "siii",
@@ -279,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $token_data['academic_year_id'],
                 $token_data['semester_id']
             );
-            mysqli_stmt_execute($stmt_eval);
+            if (!mysqli_stmt_execute($stmt_eval)) { throw new RuntimeException('Failed to insert evaluation record.'); }
 
             $evaluation_id = mysqli_insert_id($conn);
             mysqli_stmt_close($stmt_eval);
@@ -294,10 +296,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ";
 
             $stmt_response = mysqli_prepare($conn, $query_insert_response);
+            if (!$stmt_response) { throw new RuntimeException('Failed to prepare response insert.'); }
 
             foreach ($responses as $question_id => $response_value) {
                 mysqli_stmt_bind_param($stmt_response, "iii", $evaluation_id, $question_id, $response_value);
-                mysqli_stmt_execute($stmt_response);
+                if (!mysqli_stmt_execute($stmt_response)) { throw new RuntimeException('Failed to insert a response row.'); }
             }
 
             mysqli_stmt_close($stmt_response);
@@ -336,8 +339,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ";
 
             $stmt_update = mysqli_prepare($conn, $query_update_token);
+            if (!$stmt_update) { throw new RuntimeException('Failed to prepare token update.'); }
             mysqli_stmt_bind_param($stmt_update, "s", $token_data['token']);
-            mysqli_stmt_execute($stmt_update);
+            if (!mysqli_stmt_execute($stmt_update)) { throw new RuntimeException('Failed to mark token used.'); }
             mysqli_stmt_close($stmt_update);
 
             // Commit transaction
@@ -354,9 +358,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['evaluated_course'] = $token_data['course_name'];
             header("Location: success.php");
             exit();
-        } catch (Exception $e) {
-            // Rollback on error
+        } catch (\Throwable $e) {
+            // Roll back on ANY failure — including prepare()/execute() returning
+            // false, which under MYSQLI_REPORT_OFF would otherwise fall through
+            // silently and commit a partial submission.
             mysqli_rollback($conn);
+            error_log('[CES] Evaluation submit failed: ' . $e->getMessage());
             $errors[] = 'An error occurred while submitting your evaluation. Please try again.';
         }
     }

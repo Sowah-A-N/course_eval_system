@@ -84,9 +84,14 @@ function generate_tokens(mysqli $conn, int $dept_id, int $level_id, int $year_id
                 mysqli_stmt_close($stmt_chk);
             }
             $token=bin2hex(random_bytes(TOKEN_LENGTH));
-            $stmt_i=mysqli_prepare($conn,"INSERT INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,is_used) VALUES (?,?,?,?,?,0)");
+            // INSERT IGNORE + the UNIQUE(student_user_id,course_id,academic_year_id,semester_id)
+            // index make duplicate pending tokens impossible even under concurrent
+            // generation runs (no check-then-insert race). affected_rows tells us
+            // whether a row was actually created.
+            $stmt_i=mysqli_prepare($conn,"INSERT IGNORE INTO evaluation_tokens (token,student_user_id,course_id,academic_year_id,semester_id,is_used) VALUES (?,?,?,?,?,0)");
             mysqli_stmt_bind_param($stmt_i,"siiii",$token,$sid,$cid,$year_id,$sem_id);
-            if(mysqli_stmt_execute($stmt_i))$count++;
+            mysqli_stmt_execute($stmt_i);
+            if(mysqli_stmt_affected_rows($stmt_i)>0)$count++;
             mysqli_stmt_close($stmt_i);
         }
     }
