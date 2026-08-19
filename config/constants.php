@@ -159,7 +159,14 @@ define('SESSION_ABSOLUTE_LIFETIME', 28800);  // 8 hours (28 800 seconds)
 define('SESSION_COOKIE_LIFETIME', 0);        // 0 = Until browser closes
 define('SESSION_COOKIE_PATH', '/');
 define('SESSION_COOKIE_DOMAIN', '');         // Empty = Current domain
-define('SESSION_COOKIE_SECURE', false);
+// Auto-detect HTTPS: the session cookie is marked Secure in production (served
+// over HTTPS) and stays usable over plain HTTP on local dev — no flag to set.
+define('SESSION_COOKIE_SECURE',
+    (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+    || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443
+    || (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        && strtolower(explode(',', (string) $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]) === 'https')
+);
 define('SESSION_COOKIE_HTTPONLY', true);     // Prevent JavaScript access
 define('SESSION_COOKIE_SAMESITE', 'Lax');    // CSRF protection
 

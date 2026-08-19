@@ -122,6 +122,7 @@ $query_token = "
         /* c.description as course_description, */
         l.level_name,
         s.semester_name,
+        s.is_active as semester_is_active,
         ay.year_label,
         ay.is_active as year_is_active,
         d.dep_name
@@ -162,6 +163,15 @@ if ($token_data['is_used'] == 1) {
 
 // Check if the evaluation period (academic year) is still active
 if (!$token_data['year_is_active']) {
+    $_SESSION['flash_message'] = 'The evaluation period for this token has closed. No further submissions are accepted.';
+    $_SESSION['flash_type'] = 'error';
+    header("Location: index.php");
+    exit();
+}
+
+// Also require the semester itself to be active — a token can belong to an
+// active academic year but a semester that has since been closed.
+if (!$token_data['semester_is_active']) {
     $_SESSION['flash_message'] = 'The evaluation period for this token has closed. No further submissions are accepted.';
     $_SESSION['flash_type'] = 'error';
     header("Location: index.php");

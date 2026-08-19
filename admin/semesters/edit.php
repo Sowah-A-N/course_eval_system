@@ -41,9 +41,8 @@ log_audit($conn,$_SESSION['user_id'],'SEMESTER_UPDATE','semesters',$semester_id,
 
 // B1: when a semester is activated (0→1), auto-generate tokens for all dept×level combos
 if($semester['is_active']==0 && $is_active==1){
-    $result_ap=mysqli_query($conn,"SELECT academic_year_id FROM semesters WHERE semester_id=$semester_id LIMIT 1");
-    $ap_row=mysqli_fetch_assoc($result_ap);
-    $year_id=$ap_row['academic_year_id'];
+    // academic_year_id was already loaded above — reuse it (no re-query, no interpolation).
+    $year_id=$semester['academic_year_id'];
     $role=ROLE_STUDENT;
     $stmt_pairs=mysqli_prepare($conn,
         "SELECT DISTINCT u.department_id, u.level_id

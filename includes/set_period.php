@@ -27,8 +27,13 @@ if(preg_match('/^(\d+)-(\d+)$/',$key,$m)){
 }
 
 $redirect = $_POST['redirect']??'';
-// Sanitise: only allow same-origin relative paths
-if(!preg_match('/^\/[a-zA-Z0-9_\-\.\/\?=&%]+$/',$redirect)){
+// Sanitise: only allow same-origin relative paths. Must start with a single "/"
+// — reject "//host" and "/\host", which browsers treat as protocol-relative
+// (off-site) redirects.
+if($redirect===''
+   ||$redirect[0]!=='/'
+   ||(isset($redirect[1])&&($redirect[1]==='/'||$redirect[1]==='\\'))
+   ||!preg_match('#^/[a-zA-Z0-9_\-./?=&%]*$#',$redirect)){
     $redirect='/';
 }
 header("Location: $redirect");
