@@ -111,9 +111,17 @@ require_once '../../includes/header.php';
 <div class="question-actions">
 <a href="edit.php?id=<?php echo $question['question_id'];?>" class="btn btn-primary btn-sm">Edit</a>
 <?php if($question['is_active']): ?>
-<a href="deactivate.php?id=<?php echo $question['question_id'];?>" class="btn btn-warning btn-sm" onclick="return confirm('Deactivate this question?')">Deactivate</a>
+<form method="POST" action="deactivate.php" style="display:inline;" onsubmit="return confirm('Deactivate this question?')">
+    <input type="hidden" name="id" value="<?php echo $question['question_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-warning btn-sm">Deactivate</button>
+</form>
 <?php else: ?>
-<a href="activate.php?id=<?php echo $question['question_id'];?>" class="btn btn-success btn-sm">Activate</a>
+<form method="POST" action="activate.php" style="display:inline;">
+    <input type="hidden" name="id" value="<?php echo $question['question_id'];?>">
+    <?php csrf_token_input(); ?>
+    <button type="submit" class="btn btn-success btn-sm">Activate</button>
+</form>
 <?php endif;?>
 <form method="POST" action="delete.php" style="display:inline;" onsubmit="return confirm('Delete this question?')">
     <input type="hidden" name="id" value="<?php echo $question['question_id'];?>">
