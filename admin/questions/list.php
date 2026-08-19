@@ -106,6 +106,10 @@ require_once '../../includes/header.php';
 <span class="status-badge <?php echo $question['is_active']?'status-active':'status-inactive';?>">
 <?php echo $question['is_active']?'Active':'Inactive';?>
 </span>
+<?php $q_scope=$question['scope']??'course'; ?>
+<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;<?php echo $q_scope==='administrative'?'background:#ede9fe;color:#5b21b6':'background:#e0f2fe;color:#075985';?>">
+<?php echo $q_scope==='administrative'?'Once per semester':'Per course';?>
+</span>
 <span style="font-size:12px;color:#999">ID: <?php echo $question['question_id'];?></span>
 </div>
 <div class="question-actions">

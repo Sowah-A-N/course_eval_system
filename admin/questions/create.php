@@ -18,12 +18,13 @@ if(!validate_csrf_token())$errors[]='Invalid security token.';
 $question_text=trim($_POST['question_text']??'');
 $question_order=intval($_POST['question_order']??$next_order);
 $is_active=isset($_POST['is_active'])?1:0;
+$scope=(($_POST['scope']??'course')==='administrative')?'administrative':'course';
 if(empty($question_text))$errors[]='Question text required.';
 if($question_order<=0)$errors[]='Question order must be positive.';
 if(empty($errors)){
-$query="INSERT INTO evaluation_questions (question_text,display_order,is_active) VALUES (?,?,?)";
+$query="INSERT INTO evaluation_questions (question_text,display_order,is_active,scope) VALUES (?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"sii",$question_text,$question_order,$is_active);
+mysqli_stmt_bind_param($stmt,"siis",$question_text,$question_order,$is_active,$scope);
 if(mysqli_stmt_execute($stmt)){
 $new_question_id=mysqli_insert_id($conn);
 log_audit($conn,$_SESSION['user_id'],'QUESTION_CREATE','evaluation_questions',$new_question_id,null,['question_text'=>$question_text,'display_order'=>$question_order]);
@@ -85,6 +86,14 @@ require_once '../../includes/header.php';
 <label class="form-label required">Display Order</label>
 <input type="number" name="question_order" class="form-input" value="<?php echo htmlspecialchars($_POST['question_order']??$next_order);?>" min="1" required>
 <small style="color:#666">Questions are displayed in ascending order (1, 2, 3...)</small>
+</div>
+<div class="form-group">
+<label class="form-label required">Answered</label>
+<select name="scope" class="form-input">
+<option value="course" <?php echo(($_POST['scope']??'course')==='course')?'selected':'';?>>Per course — teaching questions</option>
+<option value="administrative" <?php echo(($_POST['scope']??'')==='administrative')?'selected':'';?>>Once per semester — administrative / services</option>
+</select>
+<small style="color:#666">Administrative questions (Registry, Library, class advisor, etc.) are answered only once each semester, not for every course.</small>
 </div>
 <div class="form-group">
 <label for="is_active">
