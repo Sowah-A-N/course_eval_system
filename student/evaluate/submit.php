@@ -41,156 +41,142 @@ if ($_SESSION['role_id'] !== ROLE_STUDENT) {
 $student_id = $_SESSION['user_id'];
 $student_name = $_SESSION['full_name'];
 
-// ── Token acquisition (POST-Redirect-GET pattern) ───────────────────────────
+// ── Evaluation target acquisition (POST-Redirect-GET, tokenless) ────────────
 //
-// WHY: passing the token in a GET query string (?token=abc…) causes it to be
-// recorded in web-server access logs, CDN logs, proxy logs, and browser history.
-// A stolen token can be replayed to submit a fraudulent evaluation on behalf of
-// the student.
+// available_courses.php POSTs the chosen target here: scope ('course' or
+// 'administrative') plus, for a course, its course_id. There are NO tokens —
+// eligibility is derived from the student's own enrolment, so a student can only
+// reach evaluations they are entitled to. We store the target in the session and
+// redirect to a clean URL (PRG), then render.
 //
-// HOW: available_courses.php now POSTs the token here.  On receipt we validate
-// the format, store it in the session under a one-time key, and redirect to this
-// same page with a clean URL (no query string).  The clean GET reads the token
-// from the session and removes it immediately so it can only be consumed once.
-//
-// Three entry paths:
-//   1. POST with $_POST['token']     → first entry from available_courses.php
-//   2. GET with $_SESSION key set    → after the PRG redirect (normal render)
-//   3. POST with $_POST['responses'] → evaluation form submission
-//
-// Path 3 is handled below in the "Process form submission" block; the token for
-// that path is already stored in $_SESSION['pending_eval_token'] from path 1.
+//   Path 1: POST with 'scope'          → first entry from available_courses.php
+//   Path 2: GET after the PRG redirect  → normal render
+//   Path 3: POST of the answer form     → handled in "Process form submission"
 
-$expected_token_length = TOKEN_LENGTH * 2; // 32 bytes → 64 hex chars
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['token']) && !isset($_POST['responses'])) {
-    // ── Path 1: initial POST from available_courses.php ─────────────────────
-    // Validate CSRF (the form in available_courses.php includes a token).
+// Path 1: initial POST from available_courses.php (has 'scope', not the answer form).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['scope']) && !isset($_POST['question_1'])) {
     if (!validate_csrf_token()) {
         $_SESSION['flash_message'] = 'Invalid security token.';
         $_SESSION['flash_type']    = 'error';
         header("Location: available_courses.php");
         exit();
     }
-
-    $token = trim($_POST['token']);
-
-    // Format check before any DB access
-    if (empty($token) || strlen($token) !== $expected_token_length || !ctype_xdigit($token)) {
-        $_SESSION['flash_message'] = 'Invalid evaluation token.';
-        $_SESSION['flash_type']    = 'error';
-        header("Location: available_courses.php");
-        exit();
-    }
-
-    // Store in session and redirect to clean URL (POST-Redirect-GET)
-    $_SESSION['pending_eval_token'] = $token;
+    $sel_scope  = ($_POST['scope'] === 'administrative') ? 'administrative' : 'course';
+    $sel_course = ($sel_scope === 'course') ? (int)($_POST['course_id'] ?? 0) : 0;
+    $_SESSION['pending_eval'] = ['scope' => $sel_scope, 'course_id' => $sel_course];
     header("Location: submit.php");
     exit();
 }
 
-// ── Path 2 / Path 3: GET render or evaluation form POST ─────────────────────
-// Read the token from the session key set in Path 1.
-// On a GET render we leave the key in place so the form can be displayed.
-// On a form POST (Path 3) we will clear it after successful submission below.
-$token = $_SESSION['pending_eval_token'] ?? '';
-
-if (
-    empty($token) ||
-    strlen($token) !== $expected_token_length ||
-    !ctype_xdigit($token)
-) {
-    $_SESSION['flash_message'] = 'Invalid evaluation token.';
+// Path 2 / Path 3: read the chosen target from the session key set in Path 1.
+$pending = $_SESSION['pending_eval'] ?? null;
+if (!$pending || !in_array(($pending['scope'] ?? ''), ['course', 'administrative'], true)) {
+    $_SESSION['flash_message'] = 'Please choose an evaluation to complete.';
     $_SESSION['flash_type'] = 'error';
     header("Location: available_courses.php");
     exit();
 }
+$scope     = $pending['scope'];
+$course_id = (int)($pending['course_id'] ?? 0);
 
-// Validate token
-$query_token = "
-    SELECT
-        et.token_id,
-        et.token,
-        et.student_user_id,
-        et.course_id,
-        et.academic_year_id,
-        et.semester_id,
-        et.is_used,
-        et.created_at,
-        c.course_code,
-        c.name as course_name,
-        /* c.description as course_description, */
-        l.level_name,
-        s.semester_name,
-        s.is_active as semester_is_active,
-        ay.year_label,
-        ay.is_active as year_is_active,
-        d.dep_name
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
-    LEFT JOIN level l ON c.level_id = l.t_id
-    LEFT JOIN semesters s ON et.semester_id = s.semester_id
-    LEFT JOIN academic_year ay ON et.academic_year_id = ay.academic_year_id
-    LEFT JOIN department d ON c.department_id = d.t_id
-    WHERE et.token = ?
-    AND et.student_user_id = ?
-    LIMIT 1
-";
+// Resolve the student's enrolment and the active period.
+$stmt_ctx = mysqli_prepare($conn, "SELECT department_id, level_id, class_id FROM user_details WHERE user_id = ? LIMIT 1");
+mysqli_stmt_bind_param($stmt_ctx, "i", $student_id);
+mysqli_stmt_execute($stmt_ctx);
+$stu = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_ctx));
+mysqli_stmt_close($stmt_ctx);
 
-$stmt_token = mysqli_prepare($conn, $query_token);
-mysqli_stmt_bind_param($stmt_token, "si", $token, $student_id);
-mysqli_stmt_execute($stmt_token);
-$result_token = mysqli_stmt_get_result($stmt_token);
-$token_data = mysqli_fetch_assoc($result_token);
-mysqli_stmt_close($stmt_token);
-
-// Validate token exists and belongs to this student
-if (!$token_data) {
-    $_SESSION['flash_message'] = 'Invalid or unauthorized evaluation token.';
+$period = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM view_active_period LIMIT 1"));
+if (!$period) {
+    $_SESSION['flash_message'] = 'There is no active evaluation period right now.';
     $_SESSION['flash_type'] = 'error';
-    header("Location: available_courses.php");
+    header("Location: index.php");
     exit();
 }
 
-// Check if token already used
-if ($token_data['is_used'] == 1) {
-    unset($_SESSION['pending_eval_token']); // consumed — remove from session
-    $_SESSION['flash_message'] = 'This evaluation has already been submitted.';
+$dept_id  = (int)($stu['department_id'] ?? 0);
+$level_id = (int)($stu['level_id'] ?? 0);
+$class_id = (int)($stu['class_id'] ?? 0);
+$year_id  = (int)$period['academic_year_id'];
+$sem_id   = (int)$period['semester_id'];
+
+// Build the evaluation context. ($token_data is kept as the variable name the
+// rest of this page already uses for the header/render.) No token, and no student
+// id is ever attached to the answers.
+$token_data = [
+    'scope'            => $scope,
+    'is_used'          => 0,
+    'academic_year_id' => $year_id,
+    'semester_id'      => $sem_id,
+    'semester_name'    => $period['semester_name'],
+    'year_label'       => $period['academic_year'],
+    'class_id'         => null,
+    'department_id'    => null,
+];
+
+if ($scope === 'course') {
+    // Eligibility: the course must be in the student's own department + level.
+    $stmt_c = mysqli_prepare($conn,
+        "SELECT c.id AS course_id, c.course_code, c.name AS course_name, l.level_name, d.dep_name
+         FROM courses c
+         LEFT JOIN level l ON c.level_id = l.t_id
+         LEFT JOIN department d ON c.department_id = d.t_id
+         WHERE c.id = ? AND c.department_id = ? AND c.level_id = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt_c, "iii", $course_id, $dept_id, $level_id);
+    mysqli_stmt_execute($stmt_c);
+    $course = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_c));
+    mysqli_stmt_close($stmt_c);
+    if (!$course) {
+        unset($_SESSION['pending_eval']);
+        $_SESSION['flash_message'] = 'That course is not available for you to evaluate.';
+        $_SESSION['flash_type'] = 'error';
+        header("Location: available_courses.php");
+        exit();
+    }
+    $token_data['course_id']   = (int)$course['course_id'];
+    $token_data['course_code'] = $course['course_code'];
+    $token_data['course_name'] = $course['course_name'];
+    $token_data['level_name']  = $course['level_name'];
+    $token_data['dep_name']    = $course['dep_name'];
+    $completion_course_id = (int)$course['course_id'];
+} else {
+    // Administrative evaluation — one per student per period. It carries the class
+    // (→ advisor) and department so the advisor rating and per-department service
+    // stats can be aggregated without any link back to the student.
+    $token_data['course_id']    = null;
+    $token_data['course_code']  = 'INSTITUTIONAL';
+    $token_data['course_name']  = 'Administrative & Services Evaluation';
+    $token_data['level_name']   = 'All services';
+    $token_data['dep_name']     = 'Institution-wide';
+    $token_data['class_id']     = $class_id ?: null;
+    $token_data['department_id'] = $dept_id ?: null;
+    $completion_course_id = 0;
+}
+
+// Block re-submission: reject if a completion already exists for this period.
+$stmt_done = mysqli_prepare($conn,
+    "SELECT 1 FROM evaluation_completions WHERE student_user_id = ? AND course_id = ? AND academic_year_id = ? AND semester_id = ? LIMIT 1");
+mysqli_stmt_bind_param($stmt_done, "iiii", $student_id, $completion_course_id, $year_id, $sem_id);
+mysqli_stmt_execute($stmt_done);
+$already_done = mysqli_fetch_row(mysqli_stmt_get_result($stmt_done));
+mysqli_stmt_close($stmt_done);
+if ($already_done) {
+    unset($_SESSION['pending_eval']);
+    $_SESSION['flash_message'] = 'You have already submitted this evaluation.';
     $_SESSION['flash_type'] = 'warning';
     header("Location: available_courses.php");
     exit();
 }
 
-// Check if the evaluation period (academic year) is still active
-if (!$token_data['year_is_active']) {
-    $_SESSION['flash_message'] = 'The evaluation period for this token has closed. No further submissions are accepted.';
-    $_SESSION['flash_type'] = 'error';
-    header("Location: index.php");
-    exit();
-}
-
-// Also require the semester itself to be active — a token can belong to an
-// active academic year but a semester that has since been closed.
-if (!$token_data['semester_is_active']) {
-    $_SESSION['flash_message'] = 'The evaluation period for this token has closed. No further submissions are accepted.';
-    $_SESSION['flash_type'] = 'error';
-    header("Location: index.php");
-    exit();
-}
-
 // Get all active evaluation questions grouped by category
-$query_questions = "
-    SELECT
-        question_id,
-        question_text,
-        category,
-        display_order
-    FROM evaluation_questions
-    WHERE is_active = 1
-    ORDER BY category, display_order
-";
-
-$result_questions = mysqli_query($conn, $query_questions);
+$stmt_q = mysqli_prepare($conn,
+    "SELECT question_id, question_text, category, display_order
+     FROM evaluation_questions
+     WHERE is_active = 1 AND scope = ?
+     ORDER BY category, display_order");
+mysqli_stmt_bind_param($stmt_q, "s", $scope);
+mysqli_stmt_execute($stmt_q);
+$result_questions = mysqli_stmt_get_result($stmt_q);
 $questions = [];
 $questions_by_category = [];
 
@@ -246,41 +232,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         mysqli_begin_transaction($conn);
 
         try {
-            // Lock token row inside transaction to prevent concurrent double-submissions
-            $stmt_lock = mysqli_prepare($conn, "SELECT is_used FROM evaluation_tokens WHERE token=? FOR UPDATE");
-            if (!$stmt_lock) { throw new RuntimeException('Failed to prepare token lock.'); }
-            mysqli_stmt_bind_param($stmt_lock, "s", $token_data['token']);
-            if (!mysqli_stmt_execute($stmt_lock)) { throw new RuntimeException('Failed to lock token row.'); }
-            $lock_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_lock));
-            mysqli_stmt_close($stmt_lock);
-            if (!$lock_row || $lock_row['is_used'] == 1) {
-                mysqli_rollback($conn);
-                $_SESSION['flash_message'] = 'This evaluation has already been submitted.';
-                $_SESSION['flash_type'] = 'warning';
-                header("Location: available_courses.php");
-                exit();
+            // Record completion FIRST — its UNIQUE(student, course_id, year,
+            // semester) key is the atomic double-submit guard (course_id = 0 for
+            // the administrative evaluation). A duplicate means already submitted.
+            $stmt_done = mysqli_prepare($conn,
+                "INSERT INTO evaluation_completions (student_user_id, scope, course_id, academic_year_id, semester_id)
+                 VALUES (?, ?, ?, ?, ?)");
+            if (!$stmt_done) { throw new RuntimeException('Failed to prepare completion insert.'); }
+            mysqli_stmt_bind_param($stmt_done, "isiii", $student_id, $scope, $completion_course_id, $year_id, $sem_id);
+            if (!mysqli_stmt_execute($stmt_done)) {
+                $dup = (mysqli_stmt_errno($stmt_done) === 1062);
+                mysqli_stmt_close($stmt_done);
+                if ($dup) {
+                    mysqli_rollback($conn);
+                    unset($_SESSION['pending_eval']);
+                    $_SESSION['flash_message'] = 'This evaluation has already been submitted.';
+                    $_SESSION['flash_type'] = 'warning';
+                    header("Location: available_courses.php");
+                    exit();
+                }
+                throw new RuntimeException('Failed to record completion.');
             }
+            mysqli_stmt_close($stmt_done);
 
-            // Insert evaluation record (evaluation_date defaults to NOW())
-            $query_insert_eval = "
-                INSERT INTO evaluations (
-                    token,
-                    course_id,
-                    academic_year_id,
-                    semester_id
-                ) VALUES (?, ?, ?, ?)
-            ";
-
-            $stmt_eval = mysqli_prepare($conn, $query_insert_eval);
+            // Insert the ANONYMOUS evaluation container — no token, no student id.
+            // course_id is NULL for the administrative evaluation; class_id and
+            // department_id are set only there (to attribute the advisor rating and
+            // per-department service stats without linking back to the student).
+            $eval_course_id = ($scope === 'course') ? $completion_course_id : null;
+            $eval_class_id  = $token_data['class_id'];
+            $eval_dept_id   = $token_data['department_id'];
+            $stmt_eval = mysqli_prepare($conn,
+                "INSERT INTO evaluations (scope, course_id, class_id, department_id, academic_year_id, semester_id)
+                 VALUES (?, ?, ?, ?, ?, ?)");
             if (!$stmt_eval) { throw new RuntimeException('Failed to prepare evaluation insert.'); }
-            mysqli_stmt_bind_param(
-                $stmt_eval,
-                "siii",
-                $token_data['token'],
-                $token_data['course_id'],
-                $token_data['academic_year_id'],
-                $token_data['semester_id']
-            );
+            mysqli_stmt_bind_param($stmt_eval, "siiiii", $scope, $eval_course_id, $eval_class_id, $eval_dept_id, $year_id, $sem_id);
             if (!mysqli_stmt_execute($stmt_eval)) { throw new RuntimeException('Failed to insert evaluation record.'); }
 
             $evaluation_id = mysqli_insert_id($conn);
@@ -305,44 +291,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             mysqli_stmt_close($stmt_response);
 
-            // Mark token as used AND sever the student→evaluation link.
-            //
-            // ANONYMITY FIX (#14): evaluation_tokens.student_user_id is the only
-            // field that links a submitted evaluation back to a named student.
-            // The evaluations table itself stores only the opaque token — not the
-            // student's identity — which was the intended anonymity boundary.
-            // However, any code (or DBA) that joins evaluations → evaluation_tokens
-            // → user_details can trivially reverse that boundary while student_user_id
-            // is populated.
-            //
-            // Resolution: after a successful submission, NULL-out student_user_id in
-            // the same atomic UPDATE that marks the token as used.  This means:
-            //   - The WHERE et.student_user_id = ? guard in the token-validation query
-            //     above already ran before we reach this point (the token belonged to
-            //     this student) — the check is safe to remove the FK post-commit.
-            //   - Completion-status reports count used tokens by is_used = 1, not by
-            //     student_user_id, so they are unaffected.
-            //   - The student's own "available courses" page uses student_user_id to
-            //     list their tokens — but only UNUSED tokens (is_used = 0).  After
-            //     submission the token is used, so it would not appear in the pending
-            //     list regardless; we render it as "✓ Evaluation Complete" via is_used.
-            //
-            // NOTE: The evaluation_tokens.student_user_id column must be made nullable
-            // in the schema (default: NOT NULL).  Apply the migration before deploying:
-            //   ALTER TABLE evaluation_tokens
-            //       MODIFY COLUMN student_user_id INT(11) NULL;
-            // See /database/migrations/002_nullable_student_user_id.sql
-            $query_update_token = "
-                UPDATE evaluation_tokens
-                SET is_used = 1, used_at = NOW()
-                WHERE token = ?
-            ";
-
-            $stmt_update = mysqli_prepare($conn, $query_update_token);
-            if (!$stmt_update) { throw new RuntimeException('Failed to prepare token update.'); }
-            mysqli_stmt_bind_param($stmt_update, "s", $token_data['token']);
-            if (!mysqli_stmt_execute($stmt_update)) { throw new RuntimeException('Failed to mark token used.'); }
-            mysqli_stmt_close($stmt_update);
+            // Participation is already recorded by the completion row above; the
+            // answers carry no student reference, so there is nothing to "mark used".
 
             // Commit transaction
             mysqli_commit($conn);
@@ -350,7 +300,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Clear the one-time session token now that submission succeeded.
             // This prevents the form being re-displayed if the student presses
             // Back, and removes the token from session storage.
-            unset($_SESSION['pending_eval_token']);
+            unset($_SESSION['pending_eval']);
 
             // Redirect to success page
             $_SESSION['flash_message'] = 'Your evaluation has been submitted successfully!';

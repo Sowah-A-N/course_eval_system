@@ -59,9 +59,9 @@ $query_years = "
     SELECT DISTINCT
         ay.academic_year_id,
         ay.year_label
-    FROM evaluation_tokens et
-    JOIN academic_year ay ON et.academic_year_id = ay.academic_year_id
-    WHERE et.student_user_id = ? AND et.is_used = 1
+    FROM evaluation_completions ec
+    JOIN academic_year ay ON ec.academic_year_id = ay.academic_year_id
+    WHERE ec.student_user_id = ?
     ORDER BY ay.start_year DESC
 ";
 
@@ -86,24 +86,23 @@ while ($row = mysqli_fetch_assoc($result_semesters)) {
 // Build query for completed evaluations
 $query = "
     SELECT
-        et.token_id,
-        et.used_at,
-        c.course_code,
-        c.name as course_name,
-        l.level_name,
+        ec.completion_id,
+        ec.completed_at AS used_at,
+        ec.scope,
+        COALESCE(c.course_code, 'INSTITUTIONAL') AS course_code,
+        COALESCE(c.name, 'Administrative & Services Evaluation') AS course_name,
+        COALESCE(l.level_name, 'All services') AS level_name,
         s.semester_name,
         ay.year_label,
-        d.dep_name,
-        e.evaluation_id
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
+        COALESCE(d.dep_name, 'Institution-wide') AS dep_name,
+        NULL AS evaluation_id
+    FROM evaluation_completions ec
+    LEFT JOIN courses c ON ec.course_id = c.id AND ec.course_id <> 0
     LEFT JOIN level l ON c.level_id = l.t_id
-    LEFT JOIN semesters s ON et.semester_id = s.semester_id
-    LEFT JOIN academic_year ay ON et.academic_year_id = ay.academic_year_id
+    LEFT JOIN semesters s ON ec.semester_id = s.semester_id
+    LEFT JOIN academic_year ay ON ec.academic_year_id = ay.academic_year_id
     LEFT JOIN department d ON c.department_id = d.t_id
-    LEFT JOIN evaluations e ON et.token = e.token
-    WHERE et.student_user_id = ?
-    AND et.is_used = 1
+    WHERE ec.student_user_id = ?
 ";
 
 // Add filters
@@ -111,13 +110,13 @@ $params = [$student_id];
 $types = 'i';
 
 if ($filter_academic_year > 0) {
-    $query .= " AND et.academic_year_id = ?";
+    $query .= " AND ec.academic_year_id = ?";
     $params[] = $filter_academic_year;
     $types .= 'i';
 }
 
 if ($filter_semester > 0) {
-    $query .= " AND et.semester_id = ?";
+    $query .= " AND ec.semester_id = ?";
     $params[] = $filter_semester;
     $types .= 'i';
 }
@@ -131,7 +130,7 @@ if (!empty($search_query)) {
 }
 
 // Add sorting
-$query .= " ORDER BY et.used_at $sort_order";
+$query .= " ORDER BY ec.completed_at $sort_order";
 
 // Execute query
 $stmt = mysqli_prepare($conn, $query);

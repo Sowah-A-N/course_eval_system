@@ -63,62 +63,76 @@ if (!$active_period) {
     $active_semester = $active_period['semester_name'];
 }
 
-// Get all evaluation tokens for this student with course details
-$query = "
-    SELECT
-        et.token_id,
-        et.token,
-        et.is_used,
-        et.created_at,
-        et.used_at,
-        c.id as course_id,
-        c.course_code,
-        c.name as course_name,
-        /* c.description as course_description,*/
-        l.level_name,
-        s.semester_name,
-        ay.year_label,
-        d.dep_name
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
-    LEFT JOIN level l ON c.level_id = l.t_id
-    LEFT JOIN semesters s ON et.semester_id = s.semester_id
-    LEFT JOIN academic_year ay ON et.academic_year_id = ay.academic_year_id
-    LEFT JOIN department d ON c.department_id = d.t_id
-    WHERE et.student_user_id = ?
-";
+// Resolve the student's enrolment — this drives which course evaluations they
+// may complete (courses in their department + level), replacing per-course tokens.
+$stmt_stu = mysqli_prepare($conn, "SELECT department_id, level_id, class_id FROM user_details WHERE user_id = ? LIMIT 1");
+mysqli_stmt_bind_param($stmt_stu, "i", $student_id);
+mysqli_stmt_execute($stmt_stu);
+$student = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_stu));
+mysqli_stmt_close($stmt_stu);
 
-// Add status filter
-if ($filter_status == 'pending') {
-    $query .= " AND et.is_used = 0";
-} elseif ($filter_status == 'completed') {
-    $query .= " AND et.is_used = 1";
-}
+$dept_id  = (int)($student['department_id'] ?? 0);
+$level_id = (int)($student['level_id'] ?? 0);
+$year_id  = (int)($active_period['academic_year_id'] ?? 0);
+$sem_id   = (int)($active_period['semester_id'] ?? 0);
 
-// Order by status (pending first) then by creation date
-$query .= " ORDER BY et.is_used ASC, et.created_at DESC";
-
-$stmt = mysqli_prepare($conn, $query);
-mysqli_stmt_bind_param($stmt, "i", $student_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-
-$evaluations = [];
-$pending_count = 0;
+$evaluations     = [];
+$pending_count   = 0;
 $completed_count = 0;
 
-while ($row = mysqli_fetch_assoc($result)) {
-    $evaluations[] = $row;
-    if ($row['is_used'] == 0) {
-        $pending_count++;
-    } else {
-        $completed_count++;
+if ($active_period && $dept_id && $level_id) {
+    // Eligible course evaluations = the student's dept+level courses, each flagged
+    // completed if a completion record already exists for the active period.
+    $q = "
+        SELECT c.id AS course_id, c.course_code, c.name AS course_name,
+               c.created_at,
+               l.level_name, d.dep_name,
+               ec.completion_id, ec.completed_at
+        FROM courses c
+        LEFT JOIN level l ON c.level_id = l.t_id
+        LEFT JOIN department d ON c.department_id = d.t_id
+        LEFT JOIN evaluation_completions ec
+               ON ec.student_user_id = ? AND ec.course_id = c.id
+              AND ec.academic_year_id = ? AND ec.semester_id = ?
+        WHERE c.department_id = ? AND c.level_id = ?
+        ORDER BY c.course_code
+    ";
+    $stmt = mysqli_prepare($conn, $q);
+    mysqli_stmt_bind_param($stmt, "iiiii", $student_id, $year_id, $sem_id, $dept_id, $level_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $row['is_used']       = $row['completion_id'] ? 1 : 0;
+        $row['used_at']       = $row['completed_at'];
+        $row['semester_name'] = $active_semester;
+        $row['year_label']    = $active_year;
+        if ($row['is_used']) { $completed_count++; } else { $pending_count++; }
+        if ($filter_status === 'pending'   && $row['is_used'])  continue;
+        if ($filter_status === 'completed' && !$row['is_used']) continue;
+        $evaluations[] = $row;
     }
+    mysqli_stmt_close($stmt);
 }
 
-mysqli_stmt_close($stmt);
+$total_count = $pending_count + $completed_count;
 
-$total_count = count($evaluations);
+// Administrative (once-per-semester) evaluation — services + class advisor.
+$res_aq = mysqli_query($conn, "SELECT COUNT(*) AS n FROM evaluation_questions WHERE is_active = 1 AND scope = 'administrative'");
+$admin_questions = (int)(mysqli_fetch_assoc($res_aq)['n'] ?? 0);
+
+$admin_completed    = false;
+$admin_completed_at = null;
+if ($active_period && $admin_questions > 0) {
+    $stmt_a = mysqli_prepare($conn, "SELECT completed_at FROM evaluation_completions WHERE student_user_id = ? AND course_id = 0 AND academic_year_id = ? AND semester_id = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt_a, "iii", $student_id, $year_id, $sem_id);
+    mysqli_stmt_execute($stmt_a);
+    $arow = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_a));
+    mysqli_stmt_close($stmt_a);
+    if ($arow) { $admin_completed = true; $admin_completed_at = $arow['completed_at']; }
+}
+$show_admin = ($active_period && $admin_questions > 0
+    && !($filter_status === 'pending'   && $admin_completed)
+    && !($filter_status === 'completed' && !$admin_completed));
 
 // Set breadcrumb
 $breadcrumb = [
@@ -459,8 +473,48 @@ require_once '../../includes/header.php';
     </div>
 <?php endif; ?>
 
+<!-- Administrative (once-per-semester) evaluation -->
+<?php if ($show_admin): ?>
+    <div class="courses-grid" style="margin-bottom:20px">
+        <div class="course-card <?php echo $admin_completed ? 'completed' : 'pending'; ?>">
+            <div class="status-badge <?php echo $admin_completed ? 'completed' : 'pending'; ?>">
+                <?php echo $admin_completed ? '✓ Completed' : 'Pending'; ?>
+            </div>
+            <div class="course-header">
+                <div class="course-code">INSTITUTIONAL</div>
+                <div class="course-name">Administrative &amp; Services Evaluation</div>
+            </div>
+            <div class="course-meta">
+                <div class="course-meta-item"><span>🏛️</span><span>Answered once this semester</span></div>
+                <div class="course-meta-item"><span>📅</span><span><?php echo htmlspecialchars($active_semester); ?></span></div>
+                <div class="course-meta-item"><span>📖</span><span><?php echo htmlspecialchars($active_year); ?></span></div>
+            </div>
+            <div class="course-footer">
+                <div class="submission-info">
+                    <?php if ($admin_completed): ?>
+                        <strong>Submitted:</strong> <?php echo date('M d, Y h:i A', strtotime($admin_completed_at)); ?>
+                    <?php else: ?>
+                        Rate the library, registry, accounts, your class advisor and other services.
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <?php if ($admin_completed): ?>
+                        <span class="btn btn-success">✓ Evaluation Complete</span>
+                    <?php else: ?>
+                        <form method="POST" action="submit.php" style="display:inline;margin:0">
+                            <?php csrf_token_input(); ?>
+                            <input type="hidden" name="scope" value="administrative">
+                            <button type="submit" class="btn btn-primary">Evaluate Now →</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <!-- Courses List -->
-<?php if (empty($evaluations)): ?>
+<?php if (empty($evaluations) && !$show_admin): ?>
     <!-- Empty State -->
     <div class="empty-state">
         <div class="empty-state-icon">📚</div>
@@ -530,17 +584,10 @@ require_once '../../includes/header.php';
                                 ✓ Evaluation Complete
                             </span>
                         <?php else: ?>
-                            <?php
-                            // POST the token rather than passing it in the URL.
-                            // GET parameters appear in web-server access logs, CDN
-                            // logs, and browser history — a stolen token would let
-                            // an attacker submit an evaluation on behalf of the student.
-                            // Submitting via POST keeps the token out of all logs.
-                            ?>
                             <form method="POST" action="submit.php" style="display:inline;margin:0">
                                 <?php csrf_token_input(); ?>
-                                <input type="hidden" name="token"
-                                       value="<?php echo htmlspecialchars($eval['token'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <input type="hidden" name="scope" value="course">
+                                <input type="hidden" name="course_id" value="<?php echo (int)$eval['course_id']; ?>">
                                 <button type="submit" class="btn btn-primary">
                                     Evaluate Now →
                                 </button>

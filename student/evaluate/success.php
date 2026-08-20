@@ -42,37 +42,47 @@ $student_name = $_SESSION['full_name'];
 $evaluated_course = isset($_SESSION['evaluated_course']) ? $_SESSION['evaluated_course'] : 'the course';
 unset($_SESSION['evaluated_course']); // Clear after retrieving
 
-// Get remaining pending evaluations count
-$query_pending = "
-    SELECT COUNT(*) as pending_count
-    FROM evaluation_tokens
-    WHERE student_user_id = ?
-    AND is_used = 0
-";
+// Pending / completed counts for the ACTIVE period (tokenless): eligible
+// evaluations = the student's dept+level courses (+ the administrative one) minus
+// the completions already recorded.
+$pending_count   = 0;
+$completed_count = 0;
 
-$stmt_pending = mysqli_prepare($conn, $query_pending);
-mysqli_stmt_bind_param($stmt_pending, "i", $student_id);
-mysqli_stmt_execute($stmt_pending);
-$result_pending = mysqli_stmt_get_result($stmt_pending);
-$pending_data = mysqli_fetch_assoc($result_pending);
-$pending_count = $pending_data['pending_count'];
-mysqli_stmt_close($stmt_pending);
+$period = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM view_active_period LIMIT 1"));
+if ($period) {
+    $year_id = (int)$period['academic_year_id'];
+    $sem_id  = (int)$period['semester_id'];
 
-// Get total completed evaluations
-$query_completed = "
-    SELECT COUNT(*) as completed_count
-    FROM evaluation_tokens
-    WHERE student_user_id = ?
-    AND is_used = 1
-";
+    $stmt_ctx = mysqli_prepare($conn, "SELECT department_id, level_id FROM user_details WHERE user_id = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt_ctx, "i", $student_id);
+    mysqli_stmt_execute($stmt_ctx);
+    $stu = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_ctx));
+    mysqli_stmt_close($stmt_ctx);
+    $dept = (int)($stu['department_id'] ?? 0);
+    $lvl  = (int)($stu['level_id'] ?? 0);
 
-$stmt_completed = mysqli_prepare($conn, $query_completed);
-mysqli_stmt_bind_param($stmt_completed, "i", $student_id);
-mysqli_stmt_execute($stmt_completed);
-$result_completed = mysqli_stmt_get_result($stmt_completed);
-$completed_data = mysqli_fetch_assoc($result_completed);
-$completed_count = $completed_data['completed_count'];
-mysqli_stmt_close($stmt_completed);
+    $elig_courses = 0;
+    if ($dept && $lvl) {
+        $st = mysqli_prepare($conn, "SELECT COUNT(*) AS n FROM courses WHERE department_id = ? AND level_id = ?");
+        mysqli_stmt_bind_param($st, "ii", $dept, $lvl);
+        mysqli_stmt_execute($st);
+        $elig_courses = (int)(mysqli_fetch_assoc(mysqli_stmt_get_result($st))['n'] ?? 0);
+        mysqli_stmt_close($st);
+    }
+
+    $has_admin = ((int)(mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COUNT(*) AS n FROM evaluation_questions WHERE is_active = 1 AND scope = 'administrative'"))['n'] ?? 0) > 0) ? 1 : 0;
+
+    $eligible_total = $elig_courses + $has_admin;
+
+    $st = mysqli_prepare($conn, "SELECT COUNT(*) AS n FROM evaluation_completions WHERE student_user_id = ? AND academic_year_id = ? AND semester_id = ?");
+    mysqli_stmt_bind_param($st, "iii", $student_id, $year_id, $sem_id);
+    mysqli_stmt_execute($st);
+    $completed_count = (int)(mysqli_fetch_assoc(mysqli_stmt_get_result($st))['n'] ?? 0);
+    mysqli_stmt_close($st);
+
+    $pending_count = max(0, $eligible_total - $completed_count);
+}
 
 // Set page title
 $page_title = 'Evaluation Submitted Successfully';
