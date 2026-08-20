@@ -50,7 +50,7 @@ $query = "
         u.l_name,
         u.unique_id,
         u.is_active,
-        /* u.date_created, */
+        u.created_at,
         u.level_id,
         u.class_id,
         u.department_id,
@@ -59,9 +59,9 @@ $query = "
         c.class_name,
         c.year_of_completion,
         d.dep_name,
-        d.dep_code
-       /* p.programme_name,
-        p.programme_code */
+        d.dep_code,
+        p.prog_name AS programme_name,
+        p.prog_code AS programme_code
     FROM user_details u
     LEFT JOIN level l ON u.level_id = l.t_id
     LEFT JOIN classes c ON u.class_id = c.t_id
@@ -436,10 +436,6 @@ require_once '../../includes/header.php';
                 <span class="info-value"><?php echo htmlspecialchars($student['email']); ?></span>
             </div>
             <div class="info-row">
-                <span class="info-label">Username</span>
-                <span class="info-value"><?php echo htmlspecialchars($student['username']); ?></span>
-            </div>
-            <div class="info-row">
                 <span class="info-label">Student ID</span>
                 <span class="info-value"><?php echo htmlspecialchars($student['unique_id'] ?? 'N/A'); ?></span>
             </div>
@@ -498,10 +494,6 @@ require_once '../../includes/header.php';
             <div class="info-row">
                 <span class="info-label">Account Created</span>
                 <span class="info-value"><?php echo date('M d, Y', strtotime($student['created_at'])); ?></span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">User ID</span>
-                <span class="info-value"><?php echo htmlspecialchars($student['user_id']); ?></span>
             </div>
             <div class="info-row">
                 <span class="info-label">Role</span>

@@ -73,22 +73,36 @@ require_once '../../includes/header.php';
 </div>
 </form>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" integrity="sha256-nSMFpCLCHbzkADPnLVIhA0lxJi6TcqIf4X1JWMBv+6A=" crossorigin="anonymous"></script>
 <script>
 const questionsList=document.getElementById('questionsList');
-Sortable.create(questionsList,{
-animation:150,
-handle:'.drag-handle',
-ghostClass:'sortable-ghost',
-onEnd:function(){
-updateOrderNumbers();
-}
-});
+let dragEl=null;
 function updateOrderNumbers(){
 const items=questionsList.querySelectorAll('.question-reorder-item');
 items.forEach((item,index)=>{
 item.querySelector('.question-order-num').textContent=index+1;
 });
+}
+// Native HTML5 drag-and-drop — no external library (the CSP only allows self scripts).
+questionsList.querySelectorAll('.question-reorder-item').forEach(function(item){
+item.setAttribute('draggable','true');
+item.addEventListener('dragstart',function(e){dragEl=item;setTimeout(function(){item.classList.add('sortable-ghost');},0);e.dataTransfer.effectAllowed='move';});
+item.addEventListener('dragend',function(){item.classList.remove('sortable-ghost');updateOrderNumbers();});
+});
+questionsList.addEventListener('dragover',function(e){
+e.preventDefault();
+if(!dragEl)return;
+const after=getDragAfter(e.clientY);
+if(after==null){questionsList.appendChild(dragEl);}else{questionsList.insertBefore(dragEl,after);}
+});
+function getDragAfter(y){
+const items=Array.prototype.slice.call(questionsList.querySelectorAll('.question-reorder-item:not(.sortable-ghost)'));
+let closest=null,closestOffset=Number.NEGATIVE_INFINITY;
+items.forEach(function(child){
+const box=child.getBoundingClientRect();
+const offset=y-box.top-box.height/2;
+if(offset<0&&offset>closestOffset){closestOffset=offset;closest=child;}
+});
+return closest;
 }
 function saveOrder(){
 const items=questionsList.querySelectorAll('.question-reorder-item');
