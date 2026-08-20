@@ -603,6 +603,7 @@ foreach ($_modules as $_mod => $_len) {
                     <a href="#">Reports ▾</a>
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/quality/reports/institution_overview.php">Institution Overview</a>
+                        <a href="<?php echo $base_url; ?>/quality/reports/institution_services.php">Institutional Services</a>
                         <a href="<?php echo $base_url; ?>/quality/reports/department_comparison.php">Department Comparison</a>
                         <a href="<?php echo $base_url; ?>/quality/reports/course_analysis.php">Course Analysis</a>
                         <a href="<?php echo $base_url; ?>/quality/reports/question_analysis.php">Question Analysis</a>

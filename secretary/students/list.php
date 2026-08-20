@@ -257,10 +257,10 @@ function exportTableToCSV(tableId, filename) {
     
     for (let row of table.rows) {
         let csvRow = [];
-        for (let cell of row.cells) {
-            if (row.cells.indexOf(cell) !== row.cells.length - 1) { // Skip Actions column
-                csvRow.push('"' + cell.innerText.replace(/"/g, '""') + '"');
-            }
+        const last = row.cells.length - 1;
+        for (let i = 0; i < row.cells.length; i++) {
+            if (i === 0 || i === last) continue; // skip Student ID (first) and Actions (last)
+            csvRow.push('"' + row.cells[i].innerText.replace(/"/g, '""') + '"');
         }
         csv.push(csvRow.join(','));
     }

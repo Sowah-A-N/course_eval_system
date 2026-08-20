@@ -95,5 +95,10 @@ require_once '../../includes/header.php';
 <div class="report-title">Export Data</div>
 <div class="report-desc">Export evaluation data in CSV format for external analysis and record-keeping.</div>
 </a>
+<a href="../../quality/reports/institution_services.php" class="report-card">
+<div class="report-icon">🏛️</div>
+<div class="report-title">Institutional Services</div>
+<div class="report-desc">How students rate central services (Registry, Accounts, Library, and more) and their class advisors, from the once-per-semester evaluation.</div>
+</a>
 </div>
 <?php require_once '../../includes/footer.php';?>
