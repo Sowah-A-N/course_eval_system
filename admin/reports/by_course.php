@@ -33,12 +33,13 @@ mysqli_stmt_close($stmt_courses);
 $report_data=null;
 if($filter_course>0){
 $min_responses=MIN_RESPONSE_COUNT;
-// Build token scope conditions
-$token_where="et.course_id=c.id";
+// Tokenless: evaluations link directly by course_id (scope='course'); the
+// response-rate denominator is the number of eligible students (same dept+level).
+$eval_where="e.course_id=c.id AND e.scope='course'";
 $tok_params_main=[];$tok_types_main='';
-if($filter_year>0){$token_where.=" AND et.academic_year_id=?";$tok_params_main[]=$filter_year;$tok_types_main.='i';}
-if($filter_sem>0){$token_where.=" AND et.semester_id=?";$tok_params_main[]=$filter_sem;$tok_types_main.='i';}
-$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,COUNT(DISTINCT et.token_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluation_tokens et ON $token_where LEFT JOIN evaluations e ON et.token=e.token WHERE c.id=? GROUP BY c.id";
+if($filter_year>0){$eval_where.=" AND e.academic_year_id=?";$tok_params_main[]=$filter_year;$tok_types_main.='i';}
+if($filter_sem>0){$eval_where.=" AND e.semester_id=?";$tok_params_main[]=$filter_sem;$tok_types_main.='i';}
+$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,(SELECT COUNT(*) FROM user_details u WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1 AND u.department_id=c.department_id AND u.level_id=c.level_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluations e ON $eval_where WHERE c.id=? GROUP BY c.id";
 $stmt=mysqli_prepare($conn,$query);
 $bp=[...$tok_params_main,$filter_course];$bt=$tok_types_main.'i';
 mysqli_stmt_bind_param($stmt,$bt,...$bp);
@@ -47,9 +48,9 @@ $report_data=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if($report_data&&$report_data['response_count']>=$min_responses){
 $yr_extra='';$yr_params=[];$yr_types='';
-if($filter_year>0){$yr_extra.=" AND et.academic_year_id=?";$yr_params[]=$filter_year;$yr_types.='i';}
-if($filter_sem>0){$yr_extra.=" AND et.semester_id=?";$yr_params[]=$filter_sem;$yr_types.='i';}
-$query_ratings="SELECT eq.question_text,AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating,COUNT(r.id)as rating_count FROM responses r JOIN evaluation_questions eq ON r.question_id=eq.question_id JOIN evaluations e ON r.evaluation_id=e.evaluation_id JOIN evaluation_tokens et ON e.token=et.token WHERE et.course_id=?$yr_extra GROUP BY r.question_id,eq.question_text ORDER BY eq.display_order";
+if($filter_year>0){$yr_extra.=" AND e.academic_year_id=?";$yr_params[]=$filter_year;$yr_types.='i';}
+if($filter_sem>0){$yr_extra.=" AND e.semester_id=?";$yr_params[]=$filter_sem;$yr_types.='i';}
+$query_ratings="SELECT eq.question_text,AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating,COUNT(r.id)as rating_count FROM responses r JOIN evaluation_questions eq ON r.question_id=eq.question_id JOIN evaluations e ON r.evaluation_id=e.evaluation_id WHERE e.course_id=? AND e.scope='course' AND eq.scope='course'$yr_extra GROUP BY r.question_id,eq.question_text ORDER BY eq.display_order";
 $stmt_ratings=mysqli_prepare($conn,$query_ratings);
 $rp=array_merge([$filter_course],$yr_params);$rt='i'.$yr_types;
 mysqli_stmt_bind_param($stmt_ratings,$rt,...$rp);
