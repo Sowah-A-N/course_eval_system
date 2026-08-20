@@ -66,13 +66,16 @@ if ($filter_level > 0) {
     $types .= 'i';
 }
 if ($filter_semester > 0) {
-    $where[] = "et.semester_id = ?";
+    $where[] = "e.semester_id = ?";
     $params[] = $filter_semester;
     $types .= 'i';
 }
 
 $where_clause = implode(' AND ', $where);
 
+// Tokenless: course evaluations link directly via evaluations.course_id
+// (scope='course'); response counts are DISTINCT evaluations, ratings come
+// straight from the linked responses.
 $query = "
     SELECT
         c.id,
@@ -80,13 +83,12 @@ $query = "
         c.name as course_name,
         d.dep_name,
         l.level_name,
-        COUNT(DISTINCT et.token_id) as total_evaluations,
+        COUNT(DISTINCT e.evaluation_id) as total_evaluations,
         AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating,
         MIN(CAST(r.response_value AS DECIMAL(10,2))) as min_rating,
         MAX(CAST(r.response_value AS DECIMAL(10,2))) as max_rating
     FROM courses c
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id AND et.is_used = 1
-    LEFT JOIN evaluations e ON et.token = e.token
+    LEFT JOIN evaluations e ON c.id = e.course_id AND e.scope = 'course'
     LEFT JOIN responses r ON e.evaluation_id = r.evaluation_id
     LEFT JOIN department d ON c.department_id = d.t_id
     LEFT JOIN level l ON c.level_id = l.t_id

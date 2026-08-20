@@ -27,21 +27,31 @@ if ($_SESSION['role_id'] !== ROLE_ADMIN && $_SESSION['role_id'] !== ROLE_QUALITY
 
 $page_title = 'Trend Analysis Report';
 
-// Get trends by period
+// Get trends by period (tokenless).
+//   completed -> DISTINCT course evaluations submitted in the period
+//   total     -> total possible course evaluations = eligible students
+//                (active students matching each course's dept + level); this is
+//                the institution-wide capacity, constant across periods
+//   avg_rating -> average of all course-evaluation responses in the period
 $query = "
     SELECT
         ay.year_label,
         s.semester_name,
         s.semester_value,
         ay.start_year,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed,
-        COUNT(DISTINCT et.token_id) as total,
-        AVG(CASE WHEN et.is_used = 1 THEN CAST(r.response_value AS DECIMAL(10,2)) END) as avg_rating
-    FROM evaluation_tokens et
-    JOIN academic_year ay ON et.academic_year_id = ay.academic_year_id
-    JOIN semesters s ON et.semester_id = s.semester_id
-    LEFT JOIN evaluations e ON et.token = e.token
+        COUNT(DISTINCT e.evaluation_id) as completed,
+        (SELECT COUNT(*)
+           FROM courses c2
+           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
+                AND u.is_active = 1
+                AND u.department_id = c2.department_id
+                AND u.level_id = c2.level_id) as total,
+        AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating
+    FROM evaluations e
+    JOIN academic_year ay ON e.academic_year_id = ay.academic_year_id
+    JOIN semesters s ON e.semester_id = s.semester_id
     LEFT JOIN responses r ON e.evaluation_id = r.evaluation_id
+    WHERE e.scope = 'course'
     GROUP BY ay.academic_year_id, s.semester_id
     HAVING completed >= ?
     ORDER BY ay.start_year DESC, s.semester_value

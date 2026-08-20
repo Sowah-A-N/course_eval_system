@@ -115,18 +115,17 @@ if (!$no_assignment) {
             l.level_number,
             COUNT(DISTINCT u.user_id) AS total_students,
             SUM(CASE WHEN
-                (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id) > 0
-                AND (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id AND et.is_used = 1)
-                    = (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id)
+                (SELECT COUNT(*) FROM courses c WHERE c.department_id=u.department_id AND c.level_id=u.level_id) > 0
+                AND (SELECT COUNT(*) FROM evaluation_completions ec JOIN view_active_period ap ON ec.academic_year_id=ap.academic_year_id AND ec.semester_id=ap.semester_id WHERE ec.student_user_id=u.user_id AND ec.scope='course')
+                    >= (SELECT COUNT(*) FROM courses c WHERE c.department_id=u.department_id AND c.level_id=u.level_id)
                 THEN 1 ELSE 0 END) AS complete_students,
             SUM(CASE WHEN
-                (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id) > 0
-                AND (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id AND et.is_used = 1) > 0
-                AND (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id AND et.is_used = 1)
-                    < (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id)
+                (SELECT COUNT(*) FROM evaluation_completions ec JOIN view_active_period ap ON ec.academic_year_id=ap.academic_year_id AND ec.semester_id=ap.semester_id WHERE ec.student_user_id=u.user_id AND ec.scope='course') > 0
+                AND (SELECT COUNT(*) FROM evaluation_completions ec JOIN view_active_period ap ON ec.academic_year_id=ap.academic_year_id AND ec.semester_id=ap.semester_id WHERE ec.student_user_id=u.user_id AND ec.scope='course')
+                    < (SELECT COUNT(*) FROM courses c WHERE c.department_id=u.department_id AND c.level_id=u.level_id)
                 THEN 1 ELSE 0 END) AS inprog_students,
             SUM(CASE WHEN
-                (SELECT COUNT(*) FROM evaluation_tokens et WHERE et.student_user_id = u.user_id AND et.is_used = 1) = 0
+                (SELECT COUNT(*) FROM evaluation_completions ec JOIN view_active_period ap ON ec.academic_year_id=ap.academic_year_id AND ec.semester_id=ap.semester_id WHERE ec.student_user_id=u.user_id AND ec.scope='course') = 0
                 THEN 1 ELSE 0 END) AS notstarted_students
         FROM user_details u
         JOIN level l ON u.level_id = l.t_id

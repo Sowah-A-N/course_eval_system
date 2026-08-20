@@ -31,7 +31,9 @@ if($filter_level>0){$where[]="u.level_id=?";$params[]=$filter_level;$types.='i';
 if($filter_year>0){$where[]="et.academic_year_id=?";$params[]=$filter_year;$types.='i';}
 if($filter_sem>0){$where[]="et.semester_id=?";$params[]=$filter_sem;$types.='i';}
 $where_clause=implode(' AND ',$where);
-$query="SELECT u.user_id,u.unique_id,d.dep_name,l.level_name,COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as completed_tokens FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id LEFT JOIN level l ON u.level_id=l.t_id LEFT JOIN evaluation_tokens et ON u.user_id=et.student_user_id WHERE u.role_id=? AND $where_clause GROUP BY u.user_id ORDER BY u.unique_id";
+// Tokenless: a student's eligible course evaluations = courses in their dept+level;
+// completed = their course completion records for the active period.
+$query="SELECT u.user_id,u.unique_id,d.dep_name,l.level_name,(SELECT COUNT(*) FROM courses c WHERE c.department_id=u.department_id AND c.level_id=u.level_id)as total_tokens,(SELECT COUNT(*) FROM evaluation_completions ec JOIN view_active_period ap ON ec.academic_year_id=ap.academic_year_id AND ec.semester_id=ap.semester_id WHERE ec.student_user_id=u.user_id AND ec.scope='course')as completed_tokens FROM user_details u LEFT JOIN department d ON u.department_id=d.t_id LEFT JOIN level l ON u.level_id=l.t_id WHERE u.role_id=? AND $where_clause ORDER BY u.unique_id";
 $stmt=mysqli_prepare($conn,$query);
 $role_student=ROLE_STUDENT;
 $all_params=array_merge([$role_student],$params);

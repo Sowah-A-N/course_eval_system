@@ -7,12 +7,13 @@ check_login();
 if($_SESSION['role_id'] !== ROLE_HOD){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $page_title='Lecturer Performance Report';
-$query="SELECT u.user_id,u.f_name,u.l_name,COUNT(DISTINCT et.token_id)as total_evals,
-AVG(CASE WHEN et.is_used=1 THEN CAST(r.response_value AS DECIMAL(10,2))END)as avg_rating
+// Tokenless: a lecturer's evaluations are the course-scope evaluations for the
+// courses they teach (via course_lecturers), linked directly by e.course_id.
+$query="SELECT u.user_id,u.f_name,u.l_name,COUNT(DISTINCT e.evaluation_id)as total_evals,
+AVG(CAST(r.response_value AS DECIMAL(10,2)))as avg_rating
 FROM user_details u
 LEFT JOIN course_lecturers cl ON u.user_id=cl.lecturer_user_id
-LEFT JOIN evaluation_tokens et ON cl.course_id=et.course_id AND et.is_used=1
-LEFT JOIN evaluations e ON et.token=e.token
+LEFT JOIN evaluations e ON e.course_id=cl.course_id AND e.scope='course'
 LEFT JOIN responses r ON e.evaluation_id=r.evaluation_id
 WHERE u.department_id=? AND u.role_id=?
 GROUP BY u.user_id

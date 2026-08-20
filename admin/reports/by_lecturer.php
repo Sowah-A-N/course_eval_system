@@ -26,17 +26,14 @@ mysqli_stmt_execute($stmt);
 $report_data=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if($report_data){
-// JOIN replaces the correlated IN(SELECT …) subquery.
-// The correlated subquery was re-executed for every row in evaluation_tokens;
-// the JOIN lets the optimiser pick the cheapest join order and use the index
-// on course_lecturers(lecturer_user_id, course_id, is_active) directly.
+// Tokenless: evaluations link directly by course_id (scope='course').
+// Start from course_lecturers (indexed on lecturer_user_id, course_id,
+// is_active) -> courses -> evaluations, so no token table is involved.
 $query_courses="SELECT c.course_code,c.name as course_name,COUNT(DISTINCT e.evaluation_id)as response_count
-    FROM evaluation_tokens et
-    JOIN course_lecturers cl ON et.course_id=cl.course_id
-                             AND cl.lecturer_user_id=?
-                             AND cl.is_active=1
-    JOIN courses c ON et.course_id=c.id
-    LEFT JOIN evaluations e ON et.token=e.token
+    FROM course_lecturers cl
+    JOIN courses c ON cl.course_id=c.id
+    LEFT JOIN evaluations e ON e.course_id=c.id AND e.scope='course'
+    WHERE cl.lecturer_user_id=? AND cl.is_active=1
     GROUP BY c.id
     HAVING response_count>=?
     ORDER BY c.course_code";
@@ -50,9 +47,8 @@ mysqli_stmt_close($stmt_courses);
 $report_data['courses']=$courses_data;
 $query_overall="SELECT AVG(CAST(r.response_value AS DECIMAL(10,2)))as overall_avg,COUNT(DISTINCT e.evaluation_id)as total_evaluations
     FROM responses r
-    JOIN evaluations e ON r.evaluation_id=e.evaluation_id
-    JOIN evaluation_tokens et ON e.token=et.token
-    JOIN course_lecturers cl ON et.course_id=cl.course_id
+    JOIN evaluations e ON r.evaluation_id=e.evaluation_id AND e.scope='course'
+    JOIN course_lecturers cl ON e.course_id=cl.course_id
                              AND cl.lecturer_user_id=?
                              AND cl.is_active=1";
 $stmt_overall=mysqli_prepare($conn,$query_overall);

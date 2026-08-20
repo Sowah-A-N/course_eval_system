@@ -103,9 +103,12 @@ if (empty($level_ids)) {
 } else {
     $no_assignment = false;
 
-    // Build base WHERE clause for filtering
-    $where_conditions = ["u.level_id IN (" . implode(',', array_fill(0, count($level_ids), '?')) . ")"];
-    $where_conditions[] = "u.department_id = ?";
+    // Build base WHERE clause for filtering.
+    // Tokenless: evaluations link to courses (scope='course'); scope by the
+    // course's level_id/department_id instead of the student's.
+    $where_conditions = ["c.level_id IN (" . implode(',', array_fill(0, count($level_ids), '?')) . ")"];
+    $where_conditions[] = "c.department_id = ?";
+    $where_conditions[] = "e.scope = 'course'";
 
     if ($filter_level > 0 && in_array($filter_level, $level_ids)) {
         $where_conditions[] = "e.course_id IN (SELECT id FROM courses WHERE level_id = ?)";
@@ -125,8 +128,7 @@ if (empty($level_ids)) {
     $query_count = "
         SELECT COUNT(DISTINCT e.evaluation_id) as total_evals
         FROM evaluations e
-        JOIN evaluation_tokens et ON e.token = et.token
-        JOIN user_details u ON et.student_user_id = u.user_id
+        JOIN courses c ON e.course_id = c.id
         WHERE $where_clause
     ";
 
@@ -172,9 +174,8 @@ if (empty($level_ids)) {
             FROM responses r
             JOIN evaluations e ON r.evaluation_id = e.evaluation_id
             JOIN evaluation_questions eq ON r.question_id = eq.question_id
-            JOIN evaluation_tokens et ON e.token = et.token
-            JOIN user_details u ON et.student_user_id = u.user_id
-            WHERE $where_clause
+            JOIN courses c ON e.course_id = c.id
+            WHERE $where_clause AND eq.scope = 'course'
             GROUP BY eq.category
             ORDER BY avg_rating DESC
         ";
@@ -210,9 +211,8 @@ if (empty($level_ids)) {
             FROM evaluation_questions eq
             LEFT JOIN responses r ON eq.question_id = r.question_id
             LEFT JOIN evaluations e ON r.evaluation_id = e.evaluation_id
-            LEFT JOIN evaluation_tokens et ON e.token = et.token
-            LEFT JOIN user_details u ON et.student_user_id = u.user_id
-            WHERE eq.is_active = 1
+            LEFT JOIN courses c ON e.course_id = c.id
+            WHERE eq.is_active = 1 AND eq.scope = 'course'
             AND ($where_clause OR r.id IS NULL)
             GROUP BY eq.question_id
             ORDER BY eq.category, eq.display_order

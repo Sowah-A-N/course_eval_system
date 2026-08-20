@@ -101,12 +101,16 @@ $performance_by_period = [];
 
 if (!$no_assignment) {
     // Build WHERE conditions
-    $where_conditions = ["u.level_id IN (" . implode(',', array_fill(0, count($level_ids), '?')) . ")"];
-    $where_conditions[] = "u.department_id = ?";
+    // Tokenless: the class-advisor rating now lives in ADMINISTRATIVE evaluations,
+    // which carry the student's class_id. Map the class to a level + department and
+    // match this advisor's assignments (reusing the advisor_levels mapping).
+    $where_conditions = ["e.scope = 'administrative'"];
+    $where_conditions[] = "cl.level_id IN (" . implode(',', array_fill(0, count($level_ids), '?')) . ")";
+    $where_conditions[] = "cl.department_id = ?";
     $where_conditions[] = "eq.question_text LIKE '%advisor%'"; // Advisor performance question
 
     if ($filter_level > 0 && in_array($filter_level, $level_ids)) {
-        $where_conditions[] = "u.level_id = ?";
+        $where_conditions[] = "cl.level_id = ?";
     }
     if ($filter_academic_year > 0) {
         $where_conditions[] = "e.academic_year_id = ?";
@@ -145,8 +149,7 @@ if (!$no_assignment) {
         FROM responses r
         JOIN evaluations e ON r.evaluation_id = e.evaluation_id
         JOIN evaluation_questions eq ON r.question_id = eq.question_id
-        JOIN evaluation_tokens et ON e.token = et.token
-        JOIN user_details u ON et.student_user_id = u.user_id
+        JOIN classes cl ON e.class_id = cl.t_id
         WHERE $where_clause
     ";
 
@@ -173,8 +176,7 @@ if (!$no_assignment) {
             FROM responses r
             JOIN evaluations e ON r.evaluation_id = e.evaluation_id
             JOIN evaluation_questions eq ON r.question_id = eq.question_id
-            JOIN evaluation_tokens et ON e.token = et.token
-            JOIN user_details u ON et.student_user_id = u.user_id
+            JOIN classes cl ON e.class_id = cl.t_id
             WHERE $where_clause
             GROUP BY r.response_value
             ORDER BY r.response_value
@@ -205,8 +207,7 @@ if (!$no_assignment) {
             FROM responses r
             JOIN evaluations e ON r.evaluation_id = e.evaluation_id
             JOIN evaluation_questions eq ON r.question_id = eq.question_id
-            JOIN evaluation_tokens et ON e.token = et.token
-            JOIN user_details u ON et.student_user_id = u.user_id
+            JOIN classes cl ON e.class_id = cl.t_id
             JOIN academic_year ay ON e.academic_year_id = ay.academic_year_id
             JOIN semesters s ON e.semester_id = s.semester_id
             WHERE $where_clause

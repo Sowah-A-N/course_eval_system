@@ -7,14 +7,14 @@ check_login();
 if($_SESSION['role_id'] !== ROLE_HOD){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $department_id=$_SESSION['department_id'];
 $page_title='Completion Report';
+// Tokenless: expected = eligible students for the course (dept+level);
+// completed = distinct course completions recorded this active period.
 $query="SELECT c.course_code,c.name,l.level_name,
-COUNT(DISTINCT et.token_id)as total_tokens,
-COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as completed
+(SELECT COUNT(*) FROM user_details u WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1 AND u.department_id=c.department_id AND u.level_id=c.level_id)as total_tokens,
+(SELECT COUNT(*) FROM evaluation_completions ec JOIN view_active_period ap ON ec.academic_year_id=ap.academic_year_id AND ec.semester_id=ap.semester_id WHERE ec.course_id=c.id AND ec.scope='course')as completed
 FROM courses c
 LEFT JOIN level l ON c.level_id=l.t_id
-LEFT JOIN evaluation_tokens et ON c.id=et.course_id
 WHERE c.department_id=?
-GROUP BY c.id
 ORDER BY c.course_code";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"i",$department_id);

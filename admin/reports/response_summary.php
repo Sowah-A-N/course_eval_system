@@ -6,13 +6,19 @@ start_secure_session();
 check_login();
 if($_SESSION['role_id'] !== ROLE_ADMIN){$_SESSION['flash_message']='Access denied. You do not have permission to view this page.';$_SESSION['flash_type']='error';header("Location:../../login.php");exit();}
 $page_title='Response Summary';
-$query_overall="SELECT COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens,COUNT(DISTINCT e.evaluation_id)as total_evaluations FROM evaluation_tokens et LEFT JOIN evaluations e ON et.token=e.token";
+// Tokenless: total_tokens -> eligible active students; used_tokens -> distinct
+// students who recorded a completion; total_evaluations -> course-scope answer
+// containers.
+$query_overall="SELECT (SELECT COUNT(*) FROM user_details WHERE role_id=".ROLE_STUDENT." AND is_active=1)as total_tokens,(SELECT COUNT(DISTINCT student_user_id) FROM evaluation_completions)as used_tokens,(SELECT COUNT(*) FROM evaluations WHERE scope='course')as total_evaluations";
 $overall=mysqli_fetch_assoc(mysqli_query($conn,$query_overall));
-$query_by_dept="SELECT d.dep_name,COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens FROM department d LEFT JOIN courses c ON d.t_id=c.department_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id GROUP BY d.t_id ORDER BY d.dep_name";
+// Per department: eligible students vs distinct students who completed a
+// course evaluation for a course in that department.
+$query_by_dept="SELECT d.dep_name,(SELECT COUNT(*) FROM user_details u WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1 AND u.department_id=d.t_id)as total_tokens,(SELECT COUNT(DISTINCT ec.student_user_id) FROM evaluation_completions ec JOIN courses cc ON ec.course_id=cc.id WHERE cc.department_id=d.t_id AND ec.scope='course')as used_tokens FROM department d GROUP BY d.t_id ORDER BY d.dep_name";
 $result_dept=mysqli_query($conn,$query_by_dept);
 $by_dept=[];
 while($row=mysqli_fetch_assoc($result_dept))$by_dept[]=$row;
-$query_by_level="SELECT l.level_name,COUNT(DISTINCT et.token_id)as total_tokens,COUNT(DISTINCT CASE WHEN et.is_used=1 THEN et.token_id END)as used_tokens FROM level l LEFT JOIN user_details u ON l.t_id=u.level_id LEFT JOIN evaluation_tokens et ON u.user_id=et.student_user_id GROUP BY l.t_id ORDER BY l.level_number";
+// Per level: eligible students at the level vs those who recorded any completion.
+$query_by_level="SELECT l.level_name,COUNT(DISTINCT CASE WHEN u.role_id=".ROLE_STUDENT." AND u.is_active=1 THEN u.user_id END)as total_tokens,COUNT(DISTINCT ec.student_user_id)as used_tokens FROM level l LEFT JOIN user_details u ON l.t_id=u.level_id LEFT JOIN evaluation_completions ec ON ec.student_user_id=u.user_id GROUP BY l.t_id ORDER BY l.level_number";
 $result_level=mysqli_query($conn,$query_by_level);
 $by_level=[];
 while($row=mysqli_fetch_assoc($result_level))$by_level[]=$row;
@@ -39,11 +45,11 @@ require_once '../../includes/header.php';
 <div class="stats-grid">
 <div class="stat-card">
 <div class="stat-value"><?php echo number_format($overall['total_tokens']);?></div>
-<div class="stat-label">Total Tokens</div>
+<div class="stat-label">Eligible Students</div>
 </div>
 <div class="stat-card">
 <div class="stat-value"><?php echo number_format($overall['used_tokens']);?></div>
-<div class="stat-label">Used Tokens</div>
+<div class="stat-label">Students Responded</div>
 </div>
 <div class="stat-card">
 <div class="stat-value"><?php echo number_format($overall['total_evaluations']);?></div>

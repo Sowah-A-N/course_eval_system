@@ -9,7 +9,8 @@ $page_title='Evaluation Reports';
 $query_active="SELECT * FROM view_active_period LIMIT 1";
 $result_active=mysqli_query($conn,$query_active);
 $active_period=mysqli_fetch_assoc($result_active);
-$query_stats="SELECT COUNT(DISTINCT student_user_id)as total_students,COUNT(DISTINCT course_id)as total_courses,COUNT(*)as total_tokens,SUM(is_used)as used_tokens FROM evaluation_tokens";
+// Tokenless: overall figures from the live tables.
+$query_stats="SELECT (SELECT COUNT(*) FROM user_details WHERE role_id=".ROLE_STUDENT." AND is_active=1)as total_students,(SELECT COUNT(*) FROM courses)as total_courses,(SELECT COUNT(*) FROM evaluation_completions)as used_tokens";
 $result_stats=mysqli_query($conn,$query_stats);
 $stats=mysqli_fetch_assoc($result_stats);
 $query_evals="SELECT COUNT(*)as total_evaluations FROM evaluations";
@@ -48,7 +49,7 @@ require_once '../../includes/header.php';
 </div>
 <div class="stat-card">
 <div class="stat-value"><?php echo number_format($stats['used_tokens']);?></div>
-<div class="stat-label">Tokens Used</div>
+<div class="stat-label">Submissions</div>
 </div>
 <div class="stat-card">
 <div class="stat-value"><?php echo number_format($stats['total_students']);?></div>

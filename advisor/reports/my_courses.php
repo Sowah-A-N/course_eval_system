@@ -20,11 +20,11 @@ $active_period=mysqli_fetch_assoc($result_period);
 // All periods this lecturer has evaluations for
 $stmt_periods=mysqli_prepare($conn,
     "SELECT DISTINCT ay.academic_year_id,ay.year_label AS academic_year,s.semester_id,s.semester_name
-     FROM evaluation_tokens et
-     JOIN course_lecturers cl ON et.course_id=cl.course_id
-     JOIN academic_year ay ON et.academic_year_id=ay.academic_year_id
-     JOIN semesters s ON et.semester_id=s.semester_id
-     WHERE cl.lecturer_user_id=? AND et.is_used=1
+     FROM evaluations e
+     JOIN course_lecturers cl ON e.course_id=cl.course_id
+     JOIN academic_year ay ON e.academic_year_id=ay.academic_year_id
+     JOIN semesters s ON e.semester_id=s.semester_id
+     WHERE cl.lecturer_user_id=? AND e.scope='course'
      ORDER BY ay.academic_year DESC, s.semester_value DESC");
 mysqli_stmt_bind_param($stmt_periods,"i",$lecturer_id);
 mysqli_stmt_execute($stmt_periods);
@@ -42,18 +42,20 @@ $courses = [];
 if($sel_year && $sel_sem){
     $stmt_c=mysqli_prepare($conn,
         "SELECT c.id,c.course_code,c.name,
-                COUNT(DISTINCT et.token_id) AS total_tokens,
-                SUM(et.is_used) AS used_tokens,
+                (SELECT COUNT(*) FROM user_details u
+                   WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1
+                     AND u.department_id=c.department_id AND u.level_id=c.level_id) AS total_tokens,
+                (SELECT COUNT(DISTINCT ec.student_user_id) FROM evaluation_completions ec
+                   WHERE ec.course_id=c.id AND ec.academic_year_id=? AND ec.semester_id=?) AS used_tokens,
                 AVG(CAST(r.response_value AS DECIMAL(10,2))) AS avg_rating,
                 COUNT(DISTINCT r.id) AS response_count
          FROM courses c
          JOIN course_lecturers cl ON c.id=cl.course_id AND cl.lecturer_user_id=? AND cl.is_active=1
-         LEFT JOIN evaluation_tokens et ON et.course_id=c.id AND et.academic_year_id=? AND et.semester_id=?
-         LEFT JOIN evaluations e ON et.token=e.token
+         LEFT JOIN evaluations e ON e.course_id=c.id AND e.scope='course' AND e.academic_year_id=? AND e.semester_id=?
          LEFT JOIN responses r ON e.evaluation_id=r.evaluation_id
          GROUP BY c.id
          ORDER BY c.course_code");
-    mysqli_stmt_bind_param($stmt_c,"iii",$lecturer_id,$sel_year,$sel_sem);
+    mysqli_stmt_bind_param($stmt_c,"iiiii",$sel_year,$sel_sem,$lecturer_id,$sel_year,$sel_sem);
     mysqli_stmt_execute($stmt_c);
     $res_c=mysqli_stmt_get_result($stmt_c);
     while($r=mysqli_fetch_assoc($res_c)){
@@ -71,9 +73,8 @@ if($sel_year && $sel_sem){
          FROM responses r
          JOIN evaluation_questions eq ON r.question_id=eq.question_id
          JOIN evaluations e ON r.evaluation_id=e.evaluation_id
-         JOIN evaluation_tokens et ON e.token=et.token
-         JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.lecturer_user_id=?
-         WHERE et.academic_year_id=? AND et.semester_id=?
+         JOIN course_lecturers cl ON e.course_id=cl.course_id AND cl.lecturer_user_id=?
+         WHERE e.scope='course' AND eq.scope='course' AND e.academic_year_id=? AND e.semester_id=?
          GROUP BY r.question_id,eq.question_text
          ORDER BY eq.display_order");
     mysqli_stmt_bind_param($stmt_q,"iii",$lecturer_id,$sel_year,$sel_sem);

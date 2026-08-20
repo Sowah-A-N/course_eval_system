@@ -43,8 +43,8 @@ $query_stats = "
         (SELECT COUNT(*) FROM courses) as total_courses,
         (SELECT COUNT(*) FROM classes) as total_classes,
         (SELECT COUNT(*) FROM evaluation_questions WHERE is_active = 1) as active_questions,
-        (SELECT COUNT(*) FROM evaluation_tokens) as total_tokens,
-        (SELECT COUNT(*) FROM evaluation_tokens WHERE is_used = 1) as completed_evals,
+        (SELECT COUNT(*) FROM user_details WHERE role_id = " . ROLE_STUDENT . " AND is_active = 1) as total_tokens,
+        (SELECT COUNT(DISTINCT student_user_id) FROM evaluation_completions) as completed_evals,
         (SELECT COUNT(*) FROM academic_year) as total_years,
         (SELECT COUNT(*) FROM programme) as total_programmes
 ";

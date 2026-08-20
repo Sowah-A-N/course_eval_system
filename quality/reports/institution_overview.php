@@ -60,42 +60,62 @@ while ($row = mysqli_fetch_assoc($result_semesters)) {
     $semesters[] = $row;
 }
 
-// Build WHERE clause for filters
-$where_conditions = [];
-$params = [];
-$types = '';
+// Build period filters (tokenless). The same period values are applied to the
+// evaluations table (alias e) and to the completion records (alias ec), so we
+// build a clause fragment for each alias plus one shared parameter list.
+$period_params = [];
+$period_types = '';
+$e_period = '';
+$ec_period = '';
 
 if ($filter_academic_year > 0) {
-    $where_conditions[] = "et.academic_year_id = ?";
-    $params[] = $filter_academic_year;
-    $types .= 'i';
+    $e_period  .= " AND e.academic_year_id = ?";
+    $ec_period .= " AND ec.academic_year_id = ?";
+    $period_params[] = $filter_academic_year;
+    $period_types .= 'i';
 }
 
 if ($filter_semester > 0) {
-    $where_conditions[] = "et.semester_id = ?";
-    $params[] = $filter_semester;
-    $types .= 'i';
+    $e_period  .= " AND e.semester_id = ?";
+    $ec_period .= " AND ec.semester_id = ?";
+    $period_params[] = $filter_semester;
+    $period_types .= 'i';
 }
 
-$where_clause = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_conditions) : '';
-
-// Get overall statistics
+// Get overall statistics (course evaluations only).
+//   completed_tokens -> DISTINCT course evaluations submitted
+//   total_tokens     -> total possible course evaluations = eligible students
+//                       (active students matching each course's dept + level)
+//   total_students   -> active students institution-wide
+//   active_students  -> distinct students who completed a course evaluation
 $query_overall = "
     SELECT
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens,
-        COUNT(DISTINCT et.student_user_id) as total_students,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.student_user_id END) as active_students,
-        COUNT(DISTINCT et.course_id) as total_courses,
+        (SELECT COUNT(*)
+           FROM courses c2
+           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
+                AND u.is_active = 1
+                AND u.department_id = c2.department_id
+                AND u.level_id = c2.level_id) as total_tokens,
+        (SELECT COUNT(DISTINCT ec.student_user_id)
+           FROM evaluation_completions ec
+          WHERE ec.scope = 'course' $ec_period) as active_students,
+        (SELECT COUNT(*)
+           FROM user_details u
+          WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1) as total_students,
+        COUNT(DISTINCT e.evaluation_id) as completed_tokens,
+        COUNT(DISTINCT e.course_id) as total_courses,
         COUNT(DISTINCT c.department_id) as total_departments
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
-    $where_clause
+    FROM evaluations e
+    JOIN courses c ON e.course_id = c.id
+    WHERE e.scope = 'course' $e_period
 ";
 
-if (!empty($params)) {
+$overall_params = array_merge($period_params, $period_params);
+$overall_types = $period_types . $period_types;
+
+if (!empty($overall_params)) {
     $stmt_overall = mysqli_prepare($conn, $query_overall);
-    mysqli_stmt_bind_param($stmt_overall, $types, ...$params);
+    mysqli_stmt_bind_param($stmt_overall, $overall_types, ...$overall_params);
     mysqli_stmt_execute($stmt_overall);
     $result_overall = mysqli_stmt_get_result($stmt_overall);
     $overall_stats = mysqli_fetch_assoc($result_overall);
@@ -117,20 +137,25 @@ if ($sufficient_data) {
         SELECT
             l.level_name,
             l.level_number,
-            COUNT(DISTINCT et.token_id) as level_tokens,
-            COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as level_completed
-        FROM evaluation_tokens et
-        JOIN courses c ON et.course_id = c.id
-        JOIN level l ON c.level_id = l.t_id
-        $where_clause
+            (SELECT COUNT(*)
+               FROM courses c2
+               JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
+                    AND u.is_active = 1
+                    AND u.department_id = c2.department_id
+                    AND u.level_id = c2.level_id
+              WHERE c2.level_id = l.t_id) as level_tokens,
+            COUNT(DISTINCT e.evaluation_id) as level_completed
+        FROM level l
+        LEFT JOIN courses c ON c.level_id = l.t_id
+        LEFT JOIN evaluations e ON c.id = e.course_id AND e.scope = 'course' $e_period
         GROUP BY l.t_id
         HAVING level_completed >= ?
         ORDER BY l.level_number
     ";
 
-    $level_params = $params;
+    $level_params = $period_params;
     $level_params[] = MIN_RESPONSE_COUNT;
-    $level_types = $types . 'i';
+    $level_types = $period_types . 'i';
 
     $stmt_levels = mysqli_prepare($conn, $query_levels);
     mysqli_stmt_bind_param($stmt_levels, $level_types, ...$level_params);
@@ -155,16 +180,15 @@ if ($sufficient_data) {
         FROM evaluation_questions eq
         JOIN responses r ON eq.question_id = r.question_id
         JOIN evaluations e ON r.evaluation_id = e.evaluation_id
-        JOIN evaluation_tokens et ON e.token = et.token
-        $where_clause
+        WHERE e.scope = 'course' AND eq.scope = 'course' $e_period
         GROUP BY eq.category
         HAVING response_count >= ?
         ORDER BY avg_rating DESC
     ";
 
-    $cat_params = $params;
+    $cat_params = $period_params;
     $cat_params[] = MIN_RESPONSE_COUNT;
-    $cat_types = $types . 'i';
+    $cat_types = $period_types . 'i';
 
     $stmt_categories = mysqli_prepare($conn, $query_categories);
     mysqli_stmt_bind_param($stmt_categories, $cat_types, ...$cat_params);

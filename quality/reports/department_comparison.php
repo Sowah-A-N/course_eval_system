@@ -67,33 +67,51 @@ $params = [];
 $types = '';
 
 if ($filter_academic_year > 0) {
-    $where_conditions[] = "et.academic_year_id = ?";
+    $where_conditions[] = "e.academic_year_id = ?";
     $params[] = $filter_academic_year;
     $types .= 'i';
 }
 
 if ($filter_semester > 0) {
-    $where_conditions[] = "et.semester_id = ?";
+    $where_conditions[] = "e.semester_id = ?";
     $params[] = $filter_semester;
     $types .= 'i';
 }
 
+// Period filters apply to the (tokenless) evaluations join; they live in the
+// evaluations ON clause so departments with no matching course evaluations are
+// still counted (and then filtered out by the HAVING threshold).
 $where_clause = !empty($where_conditions) ? 'AND ' . implode(' AND ', $where_conditions) : '';
 
-// Get department comparison data
+// Get department comparison data.
+// Tokenless model:
+//   completed_tokens -> DISTINCT course evaluations submitted for the dept
+//   total_tokens     -> total possible course evaluations = eligible students
+//                       (active students matching each course's dept + level),
+//                       summed across the department's courses
+//   total_students   -> active students in the department
 $query_departments = "
     SELECT
         d.t_id,
         d.dep_name,
         d.dep_code,
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens,
-        COUNT(DISTINCT et.student_user_id) as total_students,
+        (SELECT COUNT(*)
+           FROM courses c2
+           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
+                AND u.is_active = 1
+                AND u.department_id = c2.department_id
+                AND u.level_id = c2.level_id
+          WHERE c2.department_id = d.t_id) as total_tokens,
+        COUNT(DISTINCT e.evaluation_id) as completed_tokens,
+        (SELECT COUNT(*)
+           FROM user_details u
+          WHERE u.role_id = " . ROLE_STUDENT . "
+            AND u.is_active = 1
+            AND u.department_id = d.t_id) as total_students,
         COUNT(DISTINCT c.id) as total_courses
     FROM department d
     LEFT JOIN courses c ON d.t_id = c.department_id
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
-    WHERE 1=1 $where_clause
+    LEFT JOIN evaluations e ON c.id = e.course_id AND e.scope = 'course' $where_clause
     GROUP BY d.t_id
     HAVING completed_tokens >= ?
     ORDER BY completed_tokens DESC
@@ -124,9 +142,8 @@ foreach ($departments as &$dept) {
             COUNT(r.id) as response_count
         FROM responses r
         JOIN evaluations e ON r.evaluation_id = e.evaluation_id
-        JOIN evaluation_tokens et ON e.token = et.token
-        JOIN courses c ON et.course_id = c.id
-        WHERE c.department_id = ?
+        JOIN courses c ON e.course_id = c.id
+        WHERE c.department_id = ? AND e.scope = 'course'
         $where_clause
     ";
 

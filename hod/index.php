@@ -66,16 +66,16 @@ $query_period = "SELECT * FROM view_active_period LIMIT 1";
 $result_period = mysqli_query($conn, $query_period);
 $active_period = mysqli_fetch_assoc($result_period);
 
-// Get department statistics
+// Get department statistics (tokenless): completed_tokens now counts distinct
+// course-scope evaluations submitted; student/lecturer counts are unchanged.
 $query_stats = "
     SELECT
         COUNT(DISTINCT c.id) as total_courses,
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens,
+        COUNT(DISTINCT e.evaluation_id) as completed_tokens,
         COUNT(DISTINCT u.user_id) as total_students,
         COUNT(DISTINCT CASE WHEN u.role_id = " . ROLE_HOD . " THEN u.user_id END) as total_lecturers
     FROM courses c
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
+    LEFT JOIN evaluations e ON c.id = e.course_id AND e.scope = 'course'
     LEFT JOIN user_details u ON (u.department_id = ? AND (u.role_id = " . ROLE_STUDENT . " OR u.role_id = " . ROLE_HOD . "))
     WHERE c.department_id = ?
 ";
@@ -87,19 +87,41 @@ $result_stats = mysqli_stmt_get_result($stmt_stats);
 $stats = mysqli_fetch_assoc($result_stats);
 mysqli_stmt_close($stmt_stats);
 
-$completion_rate = $stats['total_tokens'] > 0 ?
-    round(($stats['completed_tokens'] / $stats['total_tokens']) * 100, 1) : 0;
+// Completion-rate denominator: eligible students (same dept + level) summed
+// across the department's courses — the tokenless analog of the old token total.
+$query_expected = "
+    SELECT COALESCE(SUM((
+        SELECT COUNT(*) FROM user_details u
+        WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1
+          AND u.department_id = c.department_id AND u.level_id = c.level_id
+    )), 0) as total_expected
+    FROM courses c
+    WHERE c.department_id = ?
+";
+$stmt_expected = mysqli_prepare($conn, $query_expected);
+mysqli_stmt_bind_param($stmt_expected, "i", $department_id);
+mysqli_stmt_execute($stmt_expected);
+$expected_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_expected));
+mysqli_stmt_close($stmt_expected);
+$total_expected = (int) ($expected_row['total_expected'] ?? 0);
+
+$completion_rate = $total_expected > 0 ?
+    round(($stats['completed_tokens'] / $total_expected) * 100, 1) : 0;
 
 // C3: per-course completion rates for the active period
 $course_completion = [];
 if($active_period){
+    // Tokenless: total_tokens -> eligible students (same dept + level);
+    // used_tokens -> distinct course evaluations submitted for the period.
     $query_cc="
         SELECT c.course_code, c.name AS course_name,
-               COUNT(et.token_id) AS total_tokens,
-               SUM(et.is_used) AS used_tokens
+               (SELECT COUNT(*) FROM user_details u
+                WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1
+                  AND u.department_id=c.department_id AND u.level_id=c.level_id) AS total_tokens,
+               COUNT(DISTINCT e.evaluation_id) AS used_tokens
         FROM courses c
-        LEFT JOIN evaluation_tokens et ON et.course_id=c.id
-            AND et.academic_year_id=? AND et.semester_id=?
+        LEFT JOIN evaluations e ON e.course_id=c.id AND e.scope='course'
+            AND e.academic_year_id=? AND e.semester_id=?
         WHERE c.department_id=?
         GROUP BY c.id
         ORDER BY c.course_code";
@@ -124,10 +146,9 @@ $query_top_courses = "
         c.course_code,
         c.name,
         AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating,
-        COUNT(DISTINCT et.token_id) as eval_count
+        COUNT(DISTINCT e.evaluation_id) as eval_count
     FROM courses c
-    JOIN evaluation_tokens et ON c.id = et.course_id AND et.is_used = 1
-    JOIN evaluations e ON et.token = e.token
+    JOIN evaluations e ON c.id = e.course_id AND e.scope = 'course'
     JOIN responses r ON e.evaluation_id = r.evaluation_id
     WHERE c.department_id = ?
     GROUP BY c.id
@@ -148,17 +169,18 @@ while ($row = mysqli_fetch_assoc($result_top)) {
 }
 mysqli_stmt_close($stmt_top);
 
-// Get recent evaluations
+// Get recent evaluations (tokenless): participation is tracked in
+// evaluation_completions; completed_at aliased to used_at to keep the markup.
 $query_recent = "
     SELECT
-        et.used_at,
+        ec.completed_at as used_at,
         c.course_code,
         c.name as course_name
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
+    FROM evaluation_completions ec
+    JOIN courses c ON ec.course_id = c.id
     WHERE c.department_id = ?
-    AND et.is_used = 1
-    ORDER BY et.used_at DESC
+    AND ec.scope = 'course'
+    ORDER BY ec.completed_at DESC
     LIMIT 10
 ";
 

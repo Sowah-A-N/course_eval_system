@@ -107,12 +107,11 @@ foreach ($assigned_levels as $level) {
 
     // Count students who have completed at least one evaluation
     $query_completed = "
-        SELECT COUNT(DISTINCT et.student_user_id) as completed_students
-        FROM evaluation_tokens et
-        JOIN user_details u ON et.student_user_id = u.user_id
+        SELECT COUNT(DISTINCT ec.student_user_id) as completed_students
+        FROM evaluation_completions ec
+        JOIN user_details u ON ec.student_user_id = u.user_id
         WHERE u.level_id = ?
         AND u.department_id = ?
-        AND et.is_used = 1
     ";
     $stmt_completed = mysqli_prepare($conn, $query_completed);
     mysqli_stmt_bind_param($stmt_completed, "ii", $level_id, $dept_id);
@@ -125,30 +124,33 @@ foreach ($assigned_levels as $level) {
     // Calculate completion rate
     $completion_rate = $total_students > 0 ? round(($completed_students / $total_students) * 100, 1) : 0;
 
-    // Count total available evaluations for this level
+    // Count total available (potential) course evaluations for this level:
+    // eligible students (same dept+level) x courses offered at that dept+level.
     $query_available = "
-        SELECT COUNT(DISTINCT et.token_id) as total_evaluations
-        FROM evaluation_tokens et
-        JOIN user_details u ON et.student_user_id = u.user_id
-        WHERE u.level_id = ?
-        AND u.department_id = ?
+        SELECT
+            (SELECT COUNT(*) FROM user_details u
+                WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1
+                AND u.level_id = ? AND u.department_id = ?)
+            *
+            (SELECT COUNT(*) FROM courses c
+                WHERE c.level_id = ? AND c.department_id = ?) as total_evaluations
     ";
     $stmt_available = mysqli_prepare($conn, $query_available);
-    mysqli_stmt_bind_param($stmt_available, "ii", $level_id, $dept_id);
+    mysqli_stmt_bind_param($stmt_available, "iiii", $level_id, $dept_id, $level_id, $dept_id);
     mysqli_stmt_execute($stmt_available);
     $result_available = mysqli_stmt_get_result($stmt_available);
     $available_data = mysqli_fetch_assoc($result_available);
     $total_evaluations = $available_data['total_evaluations'];
     mysqli_stmt_close($stmt_available);
 
-    // Count completed evaluations
+    // Count completed course evaluations (completion records, course scope)
     $query_eval_completed = "
         SELECT COUNT(*) as completed_evaluations
-        FROM evaluation_tokens et
-        JOIN user_details u ON et.student_user_id = u.user_id
+        FROM evaluation_completions ec
+        JOIN user_details u ON ec.student_user_id = u.user_id
         WHERE u.level_id = ?
         AND u.department_id = ?
-        AND et.is_used = 1
+        AND ec.course_id <> 0
     ";
     $stmt_eval_completed = mysqli_prepare($conn, $query_eval_completed);
     mysqli_stmt_bind_param($stmt_eval_completed, "ii", $level_id, $dept_id);
@@ -176,6 +178,8 @@ foreach ($assigned_levels as $level) {
 $advisor_rating = null;
 $advisor_rating_count = 0;
 
+// Advisor questions are administrative-scope; administrative evaluations carry the
+// class (-> level) and department, so scope by the class's level and the department.
 $query_advisor_rating = "
     SELECT
         AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating,
@@ -183,13 +187,14 @@ $query_advisor_rating = "
     FROM responses r
     JOIN evaluations e ON r.evaluation_id = e.evaluation_id
     JOIN evaluation_questions eq ON r.question_id = eq.question_id
-    JOIN evaluation_tokens et ON e.token = et.token
-    JOIN user_details u ON et.student_user_id = u.user_id
-    WHERE eq.question_text LIKE '%advisor%'
-    AND u.level_id IN (
+    JOIN classes cls ON e.class_id = cls.t_id
+    WHERE e.scope = 'administrative'
+    AND eq.scope = 'administrative'
+    AND eq.question_text LIKE '%advisor%'
+    AND cls.level_id IN (
         SELECT level_id FROM advisor_levels WHERE advisor_id = ?
     )
-    AND u.department_id = ?
+    AND e.department_id = ?
 ";
 
 $stmt_rating = mysqli_prepare($conn, $query_advisor_rating);
@@ -207,22 +212,21 @@ mysqli_stmt_close($stmt_rating);
 // Get recent evaluation activity (last 10 submissions from advisor's students)
 $query_recent = "
     SELECT
-        et.used_at,
+        ec.completed_at AS used_at,
         c.course_code,
         c.name as course_name,
         u.f_name,
         u.l_name,
         l.level_name
-    FROM evaluation_tokens et
-    JOIN user_details u ON et.student_user_id = u.user_id
-    JOIN courses c ON et.course_id = c.id
+    FROM evaluation_completions ec
+    JOIN user_details u ON ec.student_user_id = u.user_id
+    LEFT JOIN courses c ON ec.course_id = c.id
     JOIN level l ON u.level_id = l.t_id
-    WHERE et.is_used = 1
-    AND u.level_id IN (
+    WHERE u.level_id IN (
         SELECT level_id FROM advisor_levels WHERE advisor_id = ?
     )
     AND u.department_id = ?
-    ORDER BY et.used_at DESC
+    ORDER BY ec.completed_at DESC
     LIMIT 10
 ";
 

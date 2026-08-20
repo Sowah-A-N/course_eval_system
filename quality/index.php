@@ -56,15 +56,30 @@ if (!$active_period) {
     $active_semester = $active_period['semester_name'];
 }
 
-// Get overall statistics
+// Get overall statistics (course evaluations only, tokenless).
+//   completed_tokens -> DISTINCT course evaluations submitted
+//   total_tokens     -> total possible course evaluations = eligible students
+//                       (active students matching each course's dept + level)
+//   total_students   -> active students institution-wide
+//   active_students  -> distinct students who completed a course evaluation
+//   total_courses    -> distinct courses that have been evaluated
 $query_overall = "
     SELECT
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens,
-        COUNT(DISTINCT et.student_user_id) as total_students,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.student_user_id END) as active_students,
-        COUNT(DISTINCT et.course_id) as total_courses
-    FROM evaluation_tokens et
+        (SELECT COUNT(*)
+           FROM courses c2
+           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
+                AND u.is_active = 1
+                AND u.department_id = c2.department_id
+                AND u.level_id = c2.level_id) as total_tokens,
+        (SELECT COUNT(DISTINCT e.evaluation_id)
+           FROM evaluations e WHERE e.scope = 'course') as completed_tokens,
+        (SELECT COUNT(*)
+           FROM user_details u
+          WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1) as total_students,
+        (SELECT COUNT(DISTINCT ec.student_user_id)
+           FROM evaluation_completions ec WHERE ec.scope = 'course') as active_students,
+        (SELECT COUNT(DISTINCT e.course_id)
+           FROM evaluations e WHERE e.scope = 'course') as total_courses
 ";
 
 $result_overall = mysqli_query($conn, $query_overall);
@@ -78,16 +93,25 @@ $active_students = $overall_stats['active_students'];
 $total_courses = $overall_stats['total_courses'];
 
 // Get department statistics
+// Tokenless: dept_completed counts DISTINCT course evaluations for the dept;
+// dept_tokens is the total possible = eligible students (active students
+// matching each course's dept + level), summed across the department's courses.
 $query_departments = "
     SELECT
         d.t_id,
         d.dep_name,
         d.dep_code,
-        COUNT(DISTINCT et.token_id) as dept_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as dept_completed
+        (SELECT COUNT(*)
+           FROM courses c2
+           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
+                AND u.is_active = 1
+                AND u.department_id = c2.department_id
+                AND u.level_id = c2.level_id
+          WHERE c2.department_id = d.t_id) as dept_tokens,
+        COUNT(DISTINCT e.evaluation_id) as dept_completed
     FROM department d
     LEFT JOIN courses c ON d.t_id = c.department_id
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
+    LEFT JOIN evaluations e ON c.id = e.course_id AND e.scope = 'course'
     GROUP BY d.t_id
     HAVING dept_completed >= ?
     ORDER BY d.dep_name
@@ -111,14 +135,17 @@ while ($row = mysqli_fetch_assoc($result_departments)) {
 mysqli_stmt_close($stmt_departments);
 
 // Get category performance (only if sufficient responses)
+// Course-scope questions only, and only responses that belong to course
+// evaluations (so the new administrative evaluations do not pollute the stats).
 $query_categories = "
     SELECT
         eq.category,
         COUNT(r.id) as response_count,
         AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating
     FROM evaluation_questions eq
-    LEFT JOIN responses r ON eq.question_id = r.question_id
-    WHERE eq.is_active = 1
+    JOIN responses r ON eq.question_id = r.question_id
+    JOIN evaluations e ON r.evaluation_id = e.evaluation_id AND e.scope = 'course'
+    WHERE eq.is_active = 1 AND eq.scope = 'course'
     GROUP BY eq.category
     HAVING response_count >= ?
     ORDER BY avg_rating DESC
@@ -136,18 +163,20 @@ while ($row = mysqli_fetch_assoc($result_categories)) {
 }
 mysqli_stmt_close($stmt_categories);
 
-// Get recent evaluation activity (last 10 submissions)
+// Get recent evaluation activity (last 10 submissions).
+// Tokenless: "who completed" comes from evaluation_completions; completed_at is
+// aliased to used_at so the presentation below is unchanged.
 $query_recent = "
     SELECT
-        et.used_at,
+        ec.completed_at AS used_at,
         c.course_code,
         c.name as course_name,
         d.dep_name
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
+    FROM evaluation_completions ec
+    JOIN courses c ON ec.course_id = c.id
     JOIN department d ON c.department_id = d.t_id
-    WHERE et.is_used = 1
-    ORDER BY et.used_at DESC
+    WHERE ec.scope = 'course'
+    ORDER BY ec.completed_at DESC
     LIMIT 10
 ";
 

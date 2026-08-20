@@ -43,37 +43,47 @@ $semesters = [];
 $result_sems = mysqli_query($conn, "SELECT * FROM semesters ORDER BY semester_value");
 while ($row = mysqli_fetch_assoc($result_sems)) $semesters[] = $row;
 
-// Build where clause
-$where = ["c.department_id = ?"];
-$params = [$department_id];
-$types = 'i';
-
+// Tokenless: participation now comes from evaluation_completions. The period
+// filter applies to the completions subqueries (course completions only).
+$comp_filter = '';
+$period_params = [];
+$period_types = '';
 if ($filter_year > 0) {
-    $where[] = "et.academic_year_id = ?";
-    $params[] = $filter_year;
-    $types .= 'i';
+    $comp_filter .= " AND ec.academic_year_id = ?";
+    $period_params[] = $filter_year;
+    $period_types .= 'i';
 }
 if ($filter_semester > 0) {
-    $where[] = "et.semester_id = ?";
-    $params[] = $filter_semester;
-    $types .= 'i';
+    $comp_filter .= " AND ec.semester_id = ?";
+    $period_params[] = $filter_semester;
+    $period_types .= 'i';
 }
 
-$where_clause = implode(' AND ', $where);
-
-// Get overall statistics
+// Get overall statistics.
+//  - total_tokens  = eligible students summed across the department's courses
+//    (same dept+level as each course) -> the response-rate denominator.
+//  - completed_tokens = number of completed course evaluations in the department.
 $query_stats = "
-    SELECT 
-        COUNT(DISTINCT c.id) as total_courses,
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens
-    FROM courses c
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
-    WHERE $where_clause
+    SELECT
+        (SELECT COUNT(*) FROM courses c2 WHERE c2.department_id = ?) as total_courses,
+        (SELECT COALESCE(SUM(
+                (SELECT COUNT(*) FROM user_details u
+                   WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1
+                     AND u.department_id = c.department_id AND u.level_id = c.level_id)
+            ), 0)
+         FROM courses c WHERE c.department_id = ?) as total_tokens,
+        (SELECT COUNT(*) FROM evaluation_completions ec
+            JOIN courses c ON ec.course_id = c.id
+            WHERE c.department_id = ?$comp_filter) as completed_tokens
 ";
 
+$stats_params = [$department_id, $department_id, $department_id];
+$stats_types = 'iii';
+foreach ($period_params as $p) { $stats_params[] = $p; }
+$stats_types .= $period_types;
+
 $stmt = mysqli_prepare($conn, $query_stats);
-mysqli_stmt_bind_param($stmt, $types, ...$params);
+mysqli_stmt_bind_param($stmt, $stats_types, ...$stats_params);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $stats = mysqli_fetch_assoc($result);
@@ -82,22 +92,32 @@ mysqli_stmt_close($stmt);
 $completion_rate = $stats['total_tokens'] > 0 ? 
     round(($stats['completed_tokens'] / $stats['total_tokens']) * 100, 1) : 0;
 
-// Get course-level statistics
+// Get course-level statistics.
+//  - total_tokens     = eligible students for the course (same dept+level).
+//  - completed_tokens = distinct students who completed this course's evaluation.
 $query_courses = "
-    SELECT 
+    SELECT
         c.course_code,
         c.name,
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_tokens
+        (SELECT COUNT(*) FROM user_details u
+            WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1
+            AND u.department_id = c.department_id AND u.level_id = c.level_id) as total_tokens,
+        (SELECT COUNT(DISTINCT ec.student_user_id) FROM evaluation_completions ec
+            WHERE ec.course_id = c.id$comp_filter) as completed_tokens
     FROM courses c
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
-    WHERE $where_clause
-    GROUP BY c.id
+    WHERE c.department_id = ?
     ORDER BY c.course_code
 ";
 
+$courses_params = [];
+$courses_types = '';
+foreach ($period_params as $p) { $courses_params[] = $p; }
+$courses_types .= $period_types;
+$courses_params[] = $department_id;
+$courses_types .= 'i';
+
 $stmt_courses = mysqli_prepare($conn, $query_courses);
-mysqli_stmt_bind_param($stmt_courses, $types, ...$params);
+mysqli_stmt_bind_param($stmt_courses, $courses_types, ...$courses_params);
 mysqli_stmt_execute($stmt_courses);
 $result_courses = mysqli_stmt_get_result($stmt_courses);
 

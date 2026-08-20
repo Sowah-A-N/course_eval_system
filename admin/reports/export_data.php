@@ -34,26 +34,31 @@ function csv_safe(array $fields): array {
 header('Content-Type:text/csv');
 header('Content-Disposition:attachment;filename="evaluation_export_'.date('Y-m-d').'.csv"');
 $output=fopen('php://output','w');
-// C7: build period WHERE clauses
-$per_et_where=''; $per_et_params=[]; $per_et_types='';
-if($exp_year>0){$per_et_where.=" AND et.academic_year_id=?";$per_et_params[]=$exp_year;$per_et_types.='i';}
-if($exp_sem>0){$per_et_where.=" AND et.semester_id=?";$per_et_params[]=$exp_sem;$per_et_types.='i';}
+// C7: build period WHERE clauses. Tokenless: the period columns now live on the
+// evaluations / evaluation_completions tables, so the WHERE is built for whatever
+// alias each query uses.
+$per_et_params=[]; $per_et_types='';
+if($exp_year>0){$per_et_params[]=$exp_year;$per_et_types.='i';}
+if($exp_sem>0){$per_et_params[]=$exp_sem;$per_et_types.='i';}
+$period_where=function($alias) use ($exp_year,$exp_sem){
+    $w='';
+    if($exp_year>0){$w.=" AND $alias.academic_year_id=?";}
+    if($exp_sem>0){$w.=" AND $alias.semester_id=?";}
+    return $w;
+};
 if($type=='evaluations'){
-// ANONYMITY: Student identity (unique_id) is deliberately excluded from this
-// export.  The evaluations table stores only an opaque token — not student_user_id.
-// Including u.unique_id by joining evaluation_tokens → user_details would
-// de-anonymise every evaluation (any reader could correlate evaluation_id → student
-// and then pull their exact ratings from the responses export).
-// The export therefore contains only aggregate/course data, not the submitting student.
+// ANONYMITY: The evaluations table no longer links to any student — it holds
+// only anonymous answers (scope, course_id, period). There is therefore nothing
+// here to correlate an evaluation_id back to a submitting student, so the export
+// safely contains only aggregate/course data.
 fputcsv($output,['Evaluation ID','Course Code','Course Name','Lecturer(s)','Department','Date']);
-$q_where="1=1".$per_et_where;
+$q_where="e.scope='course'".$period_where('e');
 $query="SELECT e.evaluation_id,c.course_code,c.name,
     GROUP_CONCAT(DISTINCT CONCAT(l.f_name,' ',l.l_name) SEPARATOR '; ') AS lecturer_name,
     d.dep_name,e.evaluation_date
     FROM evaluations e
-    JOIN evaluation_tokens et ON e.token=et.token
-    JOIN courses c ON et.course_id=c.id
-    LEFT JOIN course_lecturers cl ON et.course_id=cl.course_id AND cl.is_active=1
+    JOIN courses c ON e.course_id=c.id
+    LEFT JOIN course_lecturers cl ON e.course_id=cl.course_id AND cl.is_active=1
     LEFT JOIN user_details l ON cl.lecturer_user_id=l.user_id
     LEFT JOIN department d ON c.department_id=d.t_id
     WHERE $q_where
@@ -70,18 +75,19 @@ while($row=mysqli_fetch_assoc($result)){
 fputcsv($output,csv_safe([$row['evaluation_id'],$row['course_code'],$row['name'],$row['lecturer_name'],$row['dep_name'],$row['evaluation_date']]));
 }
 }elseif($type=='tokens'){
-// Token export shows which students have been assigned tokens and whether each
-// was used — this is operational data (not evaluation content) and is appropriate
-// for admin review.  student_user_id is included here because this is pre/post
-// submission housekeeping, not the evaluation data itself.
-fputcsv($output,['Token ID','Course Code','Course Name','Department','Created Date','Used']);
-$q_where="1=1".$per_et_where;
-$query="SELECT et.token_id,c.course_code,c.name,d.dep_name,et.created_at,et.is_used
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id=c.id
+// Tokenless: the old token export is replaced by the completion-records export.
+// Completion records are participation housekeeping (who submitted, when) and
+// carry NO answers, so including student_user_id here does not de-anonymise the
+// responses export — it cannot be joined to any answer row. course_id = 0 marks
+// the once-per-semester administrative completion.
+fputcsv($output,['Completion ID','Student ID','Scope','Course Code','Course Name','Department','Completed At']);
+$q_where="1=1".$period_where('ec');
+$query="SELECT ec.completion_id,ec.student_user_id,ec.scope,c.course_code,c.name,d.dep_name,ec.completed_at
+    FROM evaluation_completions ec
+    LEFT JOIN courses c ON ec.course_id=c.id
     LEFT JOIN department d ON c.department_id=d.t_id
     WHERE $q_where
-    ORDER BY et.created_at DESC";
+    ORDER BY ec.completed_at DESC";
 if(empty($per_et_params)){
     $result=mysqli_query($conn,$query);
 }else{
@@ -90,16 +96,15 @@ if(empty($per_et_params)){
     mysqli_stmt_execute($stmt);$result=mysqli_stmt_get_result($stmt);
 }
 while($row=mysqli_fetch_assoc($result)){
-fputcsv($output,csv_safe([$row['token_id'],$row['course_code'],$row['name'],$row['dep_name'],$row['created_at'],$row['is_used']?'Yes':'No']));
+fputcsv($output,csv_safe([$row['completion_id'],$row['student_user_id'],$row['scope'],$row['course_code'],$row['name'],$row['dep_name'],$row['completed_at']]));
 }
 }elseif($type=='responses'){
 fputcsv($output,['Response ID','Evaluation ID','Question','Rating']);
-$q_where="1=1".$per_et_where;
+$q_where="e.scope='course'".$period_where('e');
 $query="SELECT r.id as response_id,r.evaluation_id,eq.question_text,r.response_value as rating
     FROM responses r
     JOIN evaluation_questions eq ON r.question_id=eq.question_id
     JOIN evaluations e ON r.evaluation_id=e.evaluation_id
-    JOIN evaluation_tokens et ON e.token=et.token
     WHERE $q_where
     ORDER BY r.evaluation_id,eq.display_order";
 if(empty($per_et_params)){
@@ -162,8 +167,8 @@ $period_inputs = function($type) use ($export_years,$export_sems) {
 </div>
 <div class="export-card">
 <div class="export-icon">🎫</div>
-<div class="export-title">Tokens Export</div>
-<div class="export-desc">Export all evaluation tokens including usage status and expiry dates.</div>
+<div class="export-title">Completions Export</div>
+<div class="export-desc">Export participation records showing which students completed evaluations and when.</div>
 <form method="POST"><?php csrf_token_input();?><input type="hidden" name="action" value="download"><input type="hidden" name="type" value="tokens"><?php $period_inputs('tokens');?><button type="submit" class="btn btn-primary">Download CSV</button></form>
 </div>
 <div class="export-card">

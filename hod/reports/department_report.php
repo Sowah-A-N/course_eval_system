@@ -34,73 +34,102 @@ $semesters = [];
 $result_sems = mysqli_query($conn, "SELECT * FROM semesters ORDER BY semester_value");
 while ($row = mysqli_fetch_assoc($result_sems)) $semesters[] = $row;
 
-// Build query
-$where = ["c.department_id = ?"];
-$params = [$department_id];
-$types = 'i';
+// Build period filters (tokenless). Two forms are needed:
+//  - the LEFT JOIN stats query keeps the period in the JOIN ON clause so courses
+//    with no matching evaluations still count toward total_courses;
+//  - the INNER JOIN category query keeps the same filters in WHERE.
+$eval_on = "e.course_id = c.id AND e.scope = 'course'";
+$eval_params = [];
+$eval_types = '';
+$cat_where = ["c.department_id = ?", "e.scope = 'course'", "eq.scope = 'course'"];
+$cat_params = [$department_id];
+$cat_types = 'i';
 
 if ($filter_year > 0) {
-    $where[] = "et.academic_year_id = ?";
-    $params[] = $filter_year;
-    $types .= 'i';
+    $eval_on .= " AND e.academic_year_id = ?";
+    $eval_params[] = $filter_year;
+    $eval_types .= 'i';
+    $cat_where[] = "e.academic_year_id = ?";
+    $cat_params[] = $filter_year;
+    $cat_types .= 'i';
 }
 if ($filter_semester > 0) {
-    $where[] = "et.semester_id = ?";
-    $params[] = $filter_semester;
-    $types .= 'i';
+    $eval_on .= " AND e.semester_id = ?";
+    $eval_params[] = $filter_semester;
+    $eval_types .= 'i';
+    $cat_where[] = "e.semester_id = ?";
+    $cat_params[] = $filter_semester;
+    $cat_types .= 'i';
 }
 
-$where_clause = implode(' AND ', $where);
+$cat_where_clause = implode(' AND ', $cat_where);
 
-// Get statistics
+// Get statistics: completed = distinct course evaluations submitted.
 $query_stats = "
-    SELECT 
+    SELECT
         COUNT(DISTINCT c.id) as total_courses,
-        COUNT(DISTINCT et.token_id) as total_tokens,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed,
-        AVG(CASE WHEN et.is_used = 1 THEN CAST(r.response_value AS DECIMAL(10,2)) END) as avg_rating
+        COUNT(DISTINCT e.evaluation_id) as completed,
+        AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating
     FROM courses c
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
-    LEFT JOIN evaluations e ON et.token = e.token
+    LEFT JOIN evaluations e ON $eval_on
     LEFT JOIN responses r ON e.evaluation_id = r.evaluation_id
-    WHERE $where_clause
+    WHERE c.department_id = ?
 ";
 
 $stmt = mysqli_prepare($conn, $query_stats);
-mysqli_stmt_bind_param($stmt, $types, ...$params);
+$stats_params = array_merge($eval_params, [$department_id]);
+$stats_types = $eval_types . 'i';
+mysqli_stmt_bind_param($stmt, $stats_types, ...$stats_params);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $stats = mysqli_fetch_assoc($result);
 mysqli_stmt_close($stmt);
 
-$completion_rate = $stats['total_tokens'] > 0 ? 
-    round(($stats['completed'] / $stats['total_tokens']) * 100, 1) : 0;
-$avg_rating = $stats['completed'] >= MIN_RESPONSE_COUNT ? 
+// Completion-rate denominator: eligible students (same dept + level) summed
+// across the department's courses — the tokenless analog of the old token total.
+$query_expected = "
+    SELECT COALESCE(SUM((
+        SELECT COUNT(*) FROM user_details u
+        WHERE u.role_id = " . ROLE_STUDENT . " AND u.is_active = 1
+          AND u.department_id = c.department_id AND u.level_id = c.level_id
+    )), 0) as total_expected
+    FROM courses c
+    WHERE c.department_id = ?
+";
+$stmt_exp = mysqli_prepare($conn, $query_expected);
+mysqli_stmt_bind_param($stmt_exp, "i", $department_id);
+mysqli_stmt_execute($stmt_exp);
+$expected_row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_exp));
+mysqli_stmt_close($stmt_exp);
+$total_expected = (int) ($expected_row['total_expected'] ?? 0);
+
+$completion_rate = $total_expected > 0 ?
+    round(($stats['completed'] / $total_expected) * 100, 1) : 0;
+$avg_rating = $stats['completed'] >= MIN_RESPONSE_COUNT ?
     round($stats['avg_rating'], 2) : null;
 
 // Get category performance
 $category_stats = [];
 if ($stats['completed'] >= MIN_RESPONSE_COUNT) {
     $query_cats = "
-        SELECT 
+        SELECT
             eq.category,
             COUNT(r.id) as response_count,
             AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating
         FROM evaluation_questions eq
         JOIN responses r ON eq.question_id = r.question_id
         JOIN evaluations e ON r.evaluation_id = e.evaluation_id
-        JOIN evaluation_tokens et ON e.token = et.token
-        JOIN courses c ON et.course_id = c.id
-        WHERE $where_clause
+        JOIN courses c ON e.course_id = c.id
+        WHERE $cat_where_clause
         GROUP BY eq.category
         ORDER BY avg_rating DESC
     ";
-    
+
     $stmt_cats = mysqli_prepare($conn, $query_cats);
-    mysqli_stmt_bind_param($stmt_cats, $types, ...$params);
+    mysqli_stmt_bind_param($stmt_cats, $cat_types, ...$cat_params);
     mysqli_stmt_execute($stmt_cats);
     $result_cats = mysqli_stmt_get_result($stmt_cats);
-    
+
     while ($row = mysqli_fetch_assoc($result_cats)) {
         $row['avg_rating'] = round($row['avg_rating'], 2);
         $category_stats[] = $row;
