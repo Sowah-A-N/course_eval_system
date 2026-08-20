@@ -539,8 +539,6 @@ foreach ($_modules as $_mod => $_len) {
                     <div class="dropdown-menu">
                         <a href="<?php echo $base_url; ?>/admin/academic_years/list.php">Academic Years</a>
                         <a href="<?php echo $base_url; ?>/admin/semesters/index.php">Semesters</a>
-                        <a href="<?php echo $base_url; ?>/admin/tokens/generate.php">Generate Tokens</a>
-                        <a href="<?php echo $base_url; ?>/admin/tokens/view.php">View Tokens</a>
                     </div>
                 </li>
                 <li>

@@ -374,11 +374,6 @@ require_once '../includes/header.php';
         <div class="action-title">Academic Years</div>
         <div class="action-desc">Manage academic year periods</div>
     </a>
-    <a href="tokens/generate.php" class="action-card">
-        <div class="action-icon">🎫</div>
-        <div class="action-title">Generate Tokens</div>
-        <div class="action-desc">Create evaluation tokens for students</div>
-    </a>
     <a href="reports/index.php" class="action-card">
         <div class="action-icon">📊</div>
         <div class="action-title">System Reports</div>
