@@ -83,13 +83,12 @@ $query = "
         c.semester_id,
         l.level_name,
         s.semester_name,
-        COUNT(DISTINCT et.token_id) as total_evals,
-        COUNT(DISTINCT CASE WHEN et.is_used = 1 THEN et.token_id END) as completed_evals,
+        (SELECT COUNT(*) FROM user_details ust WHERE ust.role_id = ".ROLE_STUDENT." AND ust.is_active = 1 AND ust.department_id = c.department_id AND ust.level_id = c.level_id) as total_evals,
+        (SELECT COUNT(DISTINCT ev.evaluation_id) FROM evaluations ev WHERE ev.course_id = c.id AND ev.scope = 'course') as completed_evals,
         GROUP_CONCAT(DISTINCT CONCAT(u.f_name, ' ', u.l_name) SEPARATOR ', ') as lecturers
     FROM courses c
     LEFT JOIN level l ON c.level_id = l.t_id
     LEFT JOIN semesters s ON c.semester_id = s.semester_id
-    LEFT JOIN evaluation_tokens et ON c.id = et.course_id
     LEFT JOIN course_lecturers cl ON c.id = cl.course_id
     LEFT JOIN user_details u ON cl.lecturer_user_id = u.user_id
     WHERE $where_clause

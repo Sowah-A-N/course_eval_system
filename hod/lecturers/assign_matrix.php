@@ -108,8 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
     // ------------------------------------------------------------------
     $stmt_ins = mysqli_prepare($conn,
         'INSERT INTO course_lecturers
-            (course_id, lecturer_user_id, academic_year_id, semester_id, assigned_at, is_active)
-         VALUES (?, ?, ?, ?, NOW(), 1)');
+            (course_id, lecturer_user_id, academic_year_id, semester_id, assigned_by, assigned_at, is_active)
+         VALUES (?, ?, ?, ?, ?, NOW(), 1)');
 
     $stmt_del = mysqli_prepare($conn,
         'DELETE FROM course_lecturers WHERE assignment_id = ?');
@@ -125,8 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
 
             if ($is_checked && !$exists) {
                 // INSERT
-                mysqli_stmt_bind_param($stmt_ins, 'iiii',
-                    $cid, $lid, $academic_year_id, $semester_id);
+                mysqli_stmt_bind_param($stmt_ins, 'iiiii',
+                    $cid, $lid, $academic_year_id, $semester_id, $hod_id);
                 mysqli_stmt_execute($stmt_ins);
                 $inserts++;
 
