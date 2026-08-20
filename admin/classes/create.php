@@ -14,20 +14,19 @@ while($row=mysqli_fetch_assoc($result_depts))$departments[]=$row;
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid security token.';
 $class_name=trim($_POST['class_name']??'');
-$class_code=trim($_POST['class_code']??'');
 $department_id=intval($_POST['department_id']??0);
 if(empty($class_name))$errors[]='Class name required.';
-if(empty($class_code))$errors[]='Class code required.';
 if($department_id==0)$errors[]='Please select a department.';
 if(empty($errors)){
-$query_check="SELECT t_id FROM classes WHERE class_code=? AND department_id=?";
+$query_check="SELECT t_id FROM classes WHERE class_name=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
-mysqli_stmt_bind_param($stmt_check,"si",$class_code,$department_id);
+mysqli_stmt_bind_param($stmt_check,"s",$class_name);
 mysqli_stmt_execute($stmt_check);
-if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Class code exists in this department.';
+if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Class name already exists.';
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
+$class_code='';
 $query="INSERT INTO classes (class_name,class_code,department_id) VALUES (?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,"ssi",$class_name,$class_code,$department_id);
@@ -73,11 +72,7 @@ require_once '../../includes/header.php';
 <div class="form-group">
 <label class="form-label required">Class Name</label>
 <input type="text" name="class_name" class="form-input" value="<?php echo htmlspecialchars($_POST['class_name']??'');?>" placeholder="e.g., Computer Science A" required>
-</div>
-<div class="form-group">
-<label class="form-label required">Class Code</label>
-<input type="text" name="class_code" class="form-input" value="<?php echo htmlspecialchars($_POST['class_code']??'');?>" placeholder="e.g., CS-A" required>
-<small style="color:#666">Unique code for this class within the department</small>
+<small style="color:#666">Must be unique</small>
 </div>
 <div class="form-group">
 <label class="form-label required">Department</label>

@@ -25,7 +25,7 @@ $stmt_periods=mysqli_prepare($conn,
      JOIN academic_year ay ON e.academic_year_id=ay.academic_year_id
      JOIN semesters s ON e.semester_id=s.semester_id
      WHERE cl.lecturer_user_id=? AND e.scope='course'
-     ORDER BY ay.academic_year DESC, s.semester_value DESC");
+     ORDER BY ay.start_year DESC, s.semester_value DESC");
 mysqli_stmt_bind_param($stmt_periods,"i",$lecturer_id);
 mysqli_stmt_execute($stmt_periods);
 $periods=[];

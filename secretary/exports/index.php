@@ -71,11 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
 
     switch ($export_type) {
         case 'students':
-            // Export students
-            fputcsv($output, ['Student ID', 'First Name', 'Last Name', 'Email', 'Username', 'Level', 'Class', 'Status', 'Date Created']);
+            // Export students (Student ID / unique_id intentionally omitted)
+            fputcsv($output, ['First Name', 'Last Name', 'Email', 'Username', 'Level', 'Class', 'Status', 'Date Created']);
 
             $query = "
-                SELECT u.unique_id, u.f_name, u.l_name, u.email, u.username,
+                SELECT u.f_name, u.l_name, u.email, u.username,
                        l.level_name, c.class_name, u.is_active, u.created_at
                 FROM user_details u
                 LEFT JOIN level l ON u.level_id = l.t_id
@@ -91,7 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
 
             while ($row = mysqli_fetch_assoc($result)) {
                 fputcsv($output, [
-                    $row['unique_id'],
                     $row['f_name'],
                     $row['l_name'],
                     $row['email'],

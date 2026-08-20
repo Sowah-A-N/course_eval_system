@@ -24,6 +24,29 @@ $department_id = $_SESSION['department_id'];
 $page_title    = 'Add New Student';
 $errors        = [];
 
+/**
+ * Generate a unique student ID of the form RMU + 9 random uppercase
+ * alphanumeric characters (A-Z, 0-9), retrying on collision against
+ * user_details.unique_id.
+ */
+function generate_unique_student_id(mysqli $conn): string {
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    $max      = strlen($alphabet) - 1;
+    do {
+        $suffix = '';
+        for ($i = 0; $i < 9; $i++) {
+            $suffix .= $alphabet[random_int(0, $max)];
+        }
+        $uid = 'RMU' . $suffix; // e.g. RMU4Z8QX1M2P
+        $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE unique_id = ? LIMIT 1");
+        mysqli_stmt_bind_param($stmt, "s", $uid);
+        mysqli_stmt_execute($stmt);
+        $exists = mysqli_stmt_get_result($stmt)->num_rows > 0;
+        mysqli_stmt_close($stmt);
+    } while ($exists);
+    return $uid;
+}
+
 // D2: pick up one-time credential display after PRG redirect
 $show_creds = null;
 if (isset($_GET['created']) && isset($_SESSION['new_student_creds'])) {
@@ -53,7 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f_name    = trim($_POST['f_name']    ?? '');
     $l_name    = trim($_POST['l_name']    ?? '');
     $email     = trim($_POST['email']     ?? '');
-    $unique_id = trim($_POST['unique_id'] ?? '');
     $level_id  = intval($_POST['level_id']  ?? 0);
     $class_id  = intval($_POST['class_id']  ?? 0);
     $is_active = isset($_POST['is_active']) ? 1 : 0;
@@ -63,25 +85,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($l_name))   $errors[] = 'Last name is required.';
     if (empty($email))    $errors[] = 'Email is required.';
     elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email format.';
-    if (empty($unique_id)) $errors[] = 'Student ID is required.';
     if ($level_id === 0)  $errors[] = 'Please select a level.';
     if ($class_id === 0)  $errors[] = 'Please select a class.';
 
     if (empty($errors)) {
         $stmt_chk = mysqli_prepare($conn,
-            "SELECT user_id FROM user_details WHERE email=? OR unique_id=?");
-        mysqli_stmt_bind_param($stmt_chk, "ss", $email, $unique_id);
+            "SELECT user_id FROM user_details WHERE email=?");
+        mysqli_stmt_bind_param($stmt_chk, "s", $email);
         mysqli_stmt_execute($stmt_chk);
         if (mysqli_stmt_get_result($stmt_chk)->num_rows > 0) {
-            $errors[] = 'Email or Student ID already exists.';
+            $errors[] = 'Email already exists.';
         }
         mysqli_stmt_close($stmt_chk);
     }
 
     if (empty($errors)) {
-        // A1+A2: auto-generate credentials
+        // A1+A2: auto-generate credentials. Students have NO username (NULL) —
+        // they sign in with their email — and get an auto-assigned Student ID.
         $temp_password = ces_generate_temp_password();
-        $username      = ces_derive_username($conn, $f_name, $l_name);
+        $username      = null;
+        $unique_id     = generate_unique_student_id($conn);
         $password_hash = password_hash($temp_password, PASSWORD_DEFAULT);
         $role          = ROLE_STUDENT;
 
@@ -90,19 +113,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              (username, password, email, f_name, l_name, unique_id, role_id,
               department_id, level_id, class_id, is_active, force_password_change, created_at)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,1,NOW())");
-        mysqli_stmt_bind_param($stmt, "ssssssiiii",
+        mysqli_stmt_bind_param($stmt, "ssssssiiiii",
             $username, $password_hash, $email, $f_name, $l_name,
             $unique_id, $role, $department_id, $level_id, $class_id, $is_active);
 
         if (mysqli_stmt_execute($stmt)) {
-            // Email the new student their login details (best-effort).
-            $emailed = ces_send_login_details($email, "$f_name $l_name", $username, $temp_password);
+            // Email the new student their login details (best-effort). Students
+            // sign in with email, so pass '' as the username (mailer falls back).
+            $emailed = ces_send_login_details($email, "$f_name $l_name", '', $temp_password);
             $_SESSION['new_student_creds'] = [
-                'name'     => "$f_name $l_name",
-                'username' => $username,
-                'password' => $temp_password,
-                'emailed'  => $emailed,
-                'continue' => ($action === 'create_another'),
+                'name'       => "$f_name $l_name",
+                'email'      => $email,
+                'student_id' => $unique_id,
+                'password'   => $temp_password,
+                'emailed'    => $emailed,
+                'continue'   => ($action === 'create_another'),
             ];
             header("Location: create.php?created=1");
             exit();
@@ -144,7 +169,7 @@ require_once '../../includes/header.php';
 
 <div class="page-header">
     <h1>Add New Student</h1>
-    <p>Username and temporary password are generated automatically</p>
+    <p>Student ID and temporary password are generated automatically; students sign in with their email</p>
 </div>
 
 <?php if ($show_creds): ?>
@@ -157,9 +182,16 @@ require_once '../../includes/header.php';
     <?php endif; ?>
     <table class="creds-table">
         <tr>
-            <td>Username</td>
+            <td>Student ID</td>
             <td>
-                <code id="cred-user"><?php echo htmlspecialchars($show_creds['username']); ?></code>
+                <code id="cred-sid"><?php echo htmlspecialchars($show_creds['student_id']); ?></code>
+                <button class="copy-btn" onclick="copyText('cred-sid',this)">Copy</button>
+            </td>
+        </tr>
+        <tr>
+            <td>Email (sign-in)</td>
+            <td>
+                <code id="cred-user"><?php echo htmlspecialchars($show_creds['email']); ?></code>
                 <button class="copy-btn" onclick="copyText('cred-user',this)">Copy</button>
             </td>
         </tr>
@@ -208,22 +240,11 @@ require_once '../../includes/header.php';
                    value="<?php echo htmlspecialchars($_POST['l_name'] ?? ''); ?>" required>
         </div>
 
-        <!-- Auto-generated username preview (read-only hint) -->
-        <div class="form-group">
-            <label class="form-label">Username <span style="color:#888;font-weight:400">(auto-generated)</span></label>
-            <input type="text" id="username-preview" class="form-input" readonly
-                   style="background:#f8f9fa;color:#666" placeholder="Will be generated from name…">
-        </div>
-
         <div class="form-group">
             <label class="form-label required">Email</label>
             <input type="email" name="email" class="form-input"
                    value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>" required>
-        </div>
-        <div class="form-group">
-            <label class="form-label required">Student ID</label>
-            <input type="text" name="unique_id" class="form-input"
-                   value="<?php echo htmlspecialchars($_POST['unique_id'] ?? ''); ?>" required>
+            <small style="color:#666">Students sign in with their email. A Student ID is generated automatically.</small>
         </div>
         <div class="form-group">
             <label class="form-label required">Level</label>
@@ -265,22 +286,6 @@ require_once '../../includes/header.php';
 <?php endif; ?>
 
 <script>
-// Live username preview (first.last)
-(function(){
-    var fn = document.getElementById('f_name');
-    var ln = document.getElementById('l_name');
-    var pr = document.getElementById('username-preview');
-    if (!fn || !ln || !pr) return;
-    function update(){
-        var f = fn.value.replace(/[^a-zA-Z]/g,'').toLowerCase();
-        var l = ln.value.replace(/[^a-zA-Z]/g,'').toLowerCase();
-        pr.value = (f && l) ? f + '.' + l : '';
-    }
-    fn.addEventListener('input', update);
-    ln.addEventListener('input', update);
-    update();
-}());
-
 // Copy-to-clipboard helper
 function copyText(id, btn) {
     var el = document.getElementById(id);

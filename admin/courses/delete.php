@@ -15,7 +15,7 @@ mysqli_stmt_execute($stmt);
 $course=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if(!$course){$_SESSION['flash_message']='Course not found.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
-$query_tokens="SELECT COUNT(*)as count FROM evaluation_tokens WHERE course_id=?";
+$query_tokens="SELECT COUNT(*)as count FROM evaluations WHERE course_id=? AND scope='course'";
 $stmt_tokens=mysqli_prepare($conn,$query_tokens);
 mysqli_stmt_bind_param($stmt_tokens,"i",$course_id);
 mysqli_stmt_execute($stmt_tokens);
@@ -24,7 +24,7 @@ mysqli_stmt_close($stmt_tokens);
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';$_SESSION['flash_type']='error';header("Location:list.php");exit();}
 if($token_count>0){
-$_SESSION['flash_message']='Cannot delete course with evaluation tokens.';
+$_SESSION['flash_message']='Cannot delete a course that already has submitted evaluations.';
 $_SESSION['flash_type']='error';
 header("Location:list.php");
 exit();
@@ -59,10 +59,10 @@ require_once '../../includes/header.php';
 <div style="padding:20px;background:#f8f9fa;border-radius:8px;margin:20px 0;text-align:left">
 <strong>Course Code:</strong> <?php echo htmlspecialchars($course['course_code']);?><br>
 <strong>Course Name:</strong> <?php echo htmlspecialchars($course['name']);?><br>
-<strong>Evaluation Tokens:</strong> <?php echo $token_count;?>
+<strong>Submitted Evaluations:</strong> <?php echo $token_count;?>
 </div>
 <?php if($token_count>0): ?>
-<p style="color:#dc3545;font-weight:600">Cannot delete! This course has <?php echo $token_count;?> evaluation token(s).</p>
+<p style="color:#dc3545;font-weight:600">Cannot delete! This course has <?php echo $token_count;?> submitted evaluation(s).</p>
 <a href="list.php" class="btn btn-secondary">Back to List</a>
 <?php else: ?>
 <p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>

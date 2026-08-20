@@ -24,6 +24,29 @@ if ($_SESSION['role_id'] !== ROLE_ADMIN) {
 $page_title = 'Add New User';
 $errors     = [];
 
+/**
+ * Generate a unique student ID of the form RMU + 9 random uppercase
+ * alphanumeric characters (A-Z, 0-9), retrying on collision against
+ * user_details.unique_id.
+ */
+function generate_unique_student_id(mysqli $conn): string {
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    $max      = strlen($alphabet) - 1;
+    do {
+        $suffix = '';
+        for ($i = 0; $i < 9; $i++) {
+            $suffix .= $alphabet[random_int(0, $max)];
+        }
+        $uid = 'RMU' . $suffix; // e.g. RMU4Z8QX1M2P
+        $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE unique_id = ? LIMIT 1");
+        mysqli_stmt_bind_param($stmt, "s", $uid);
+        mysqli_stmt_execute($stmt);
+        $exists = mysqli_stmt_get_result($stmt)->num_rows > 0;
+        mysqli_stmt_close($stmt);
+    } while ($exists);
+    return $uid;
+}
+
 // Dropdown data
 $departments = [];
 $result_depts = mysqli_query($conn, "SELECT * FROM department ORDER BY dep_name");
@@ -80,13 +103,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         // A1+A2: auto-generate credentials
         $temp_password = ces_generate_temp_password();
-        $username      = ces_derive_username($conn, $f_name, $l_name);
-        $password_hash = password_hash($temp_password, PASSWORD_DEFAULT);
+        $is_student    = ($role_id === ROLE_STUDENT);
 
         $dept_id_val   = $department_id > 0 ? $department_id : null;
         $level_id_val  = $level_id > 0      ? $level_id      : null;
         $class_id_val  = $class_id > 0      ? $class_id      : null;
-        $uid_val       = !empty($unique_id)  ? $unique_id     : null;
+
+        if ($is_student) {
+            // Students have NO username (NULL) — they sign in with their email —
+            // and get an auto-assigned Student ID of the form RMU + 9 chars.
+            $username = null;
+            $uid_val  = generate_unique_student_id($conn);
+        } else {
+            // Other roles keep the derived username and any manual unique_id.
+            $username = ces_derive_username($conn, $f_name, $l_name);
+            $uid_val  = !empty($unique_id) ? $unique_id : null;
+        }
+        $password_hash = password_hash($temp_password, PASSWORD_DEFAULT);
 
         $stmt = mysqli_prepare($conn,
             "INSERT INTO user_details
@@ -101,15 +134,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new_id = mysqli_insert_id($conn);
             log_audit($conn, $_SESSION['user_id'], AUDIT_USER_CREATE, 'user_details', $new_id, null,
                 ['username' => $username, 'email' => $email, 'role_id' => $role_id]);
-            // Email the new user their login details (best-effort).
-            $emailed = ces_send_login_details($email, "$f_name $l_name", $username, $temp_password);
+            // Email the new user their login details (best-effort). Students
+            // sign in with email, so pass '' as the username (mailer falls back).
+            $emailed = ces_send_login_details($email, "$f_name $l_name", $is_student ? '' : (string) $username, $temp_password);
             $_SESSION['new_user_creds'] = [
-                'name'     => "$f_name $l_name",
-                'username' => $username,
-                'password' => $temp_password,
-                'role'     => ROLE_NAMES[$role_id] ?? 'User',
-                'emailed'  => $emailed,
-                'continue' => ($action === 'create_another'),
+                'name'       => "$f_name $l_name",
+                'username'   => $is_student ? '' : (string) $username,
+                'is_student' => $is_student,
+                'email'      => $email,
+                'student_id' => $is_student ? $uid_val : '',
+                'password'   => $temp_password,
+                'role'       => ROLE_NAMES[$role_id] ?? 'User',
+                'emailed'    => $emailed,
+                'continue'   => ($action === 'create_another'),
             ];
             header("Location: create.php?created=1");
             exit();
@@ -160,6 +197,22 @@ require_once '../../includes/header.php';
     <p style="color:#166534;font-size:14px">📧 A copy of these login details has been emailed to the user.</p>
     <?php endif; ?>
     <table class="creds-table">
+        <?php if (!empty($show_creds['is_student'])): ?>
+        <tr>
+            <td>Student ID</td>
+            <td>
+                <code id="cred-sid"><?php echo htmlspecialchars($show_creds['student_id']); ?></code>
+                <button class="copy-btn" onclick="copyText('cred-sid',this)">Copy</button>
+            </td>
+        </tr>
+        <tr>
+            <td>Email (sign-in)</td>
+            <td>
+                <code id="cred-user"><?php echo htmlspecialchars($show_creds['email']); ?></code>
+                <button class="copy-btn" onclick="copyText('cred-user',this)">Copy</button>
+            </td>
+        </tr>
+        <?php else: ?>
         <tr>
             <td>Username</td>
             <td>
@@ -167,6 +220,7 @@ require_once '../../includes/header.php';
                 <button class="copy-btn" onclick="copyText('cred-user',this)">Copy</button>
             </td>
         </tr>
+        <?php endif; ?>
         <tr>
             <td>Temporary Password</td>
             <td>
@@ -239,10 +293,6 @@ require_once '../../includes/header.php';
 <?php endforeach; ?>
 </select>
 </div>
-<div class="form-group conditional-field" id="student-id-field">
-<label class="form-label">Student ID</label>
-<input type="text" name="unique_id" class="form-input" value="<?php echo htmlspecialchars($_POST['unique_id'] ?? ''); ?>">
-</div>
 <div class="form-group conditional-field" id="level-field">
 <label class="form-label">Level</label>
 <select name="level_id" class="form-select">
@@ -281,9 +331,11 @@ const ROLE_STUDENT_ID=<?php echo ROLE_STUDENT; ?>;
 document.getElementById('role_id').addEventListener('change',function(){
     var roleId=parseInt(this.value);
     document.getElementById('dept-field').style.display=ROLES_WITH_DEPT.includes(roleId)?'block':'none';
-    document.getElementById('student-id-field').style.display=(roleId===ROLE_STUDENT_ID)?'block':'none';
     document.getElementById('level-field').style.display=(roleId===ROLE_STUDENT_ID)?'block':'none';
     document.getElementById('class-field').style.display=(roleId===ROLE_STUDENT_ID)?'block':'none';
+    // Students have no username (they sign in with email), so hide the preview.
+    var upg=document.getElementById('username-preview').closest('.form-group');
+    if(upg) upg.style.display=(roleId===ROLE_STUDENT_ID)?'none':'block';
 });
 document.getElementById('role_id').dispatchEvent(new Event('change'));
 

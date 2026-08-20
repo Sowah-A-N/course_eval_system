@@ -76,7 +76,7 @@ define('ROLE_NAMES', [
     ROLE_ADMIN => 'Administrator',
     ROLE_HOD => 'Head of Department',
     ROLE_SECRETARY => 'Secretary',
-    ROLE_ADVISOR => 'Advisor / Lecturer',
+    ROLE_ADVISOR => 'Lecturer',
     ROLE_STUDENT => 'Student',
     ROLE_QUALITY => 'Quality Assurance',
 ]);

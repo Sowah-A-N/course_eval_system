@@ -37,7 +37,7 @@ $params[]=$search_param;
 $types.='ss';
 }
 $where_clause=implode(' AND ',$where);
-$query="SELECT c.id,c.course_code,c.name,/* c.credit_hours--,*/l.level_name,s.semester_name,COUNT(DISTINCT et.token_id)as eval_count FROM courses c LEFT JOIN level l ON c.level_id=l.t_id LEFT JOIN semesters s ON c.semester_id=s.semester_id LEFT JOIN evaluation_tokens et ON c.id=et.course_id WHERE $where_clause GROUP BY c.id ORDER BY c.course_code";
+$query="SELECT c.id,c.course_code,c.name,/* c.credit_hours--,*/l.level_name,s.semester_name,COUNT(DISTINCT e.evaluation_id)as eval_count FROM courses c LEFT JOIN level l ON c.level_id=l.t_id LEFT JOIN semesters s ON c.semester_id=s.semester_id LEFT JOIN evaluations e ON c.id=e.course_id AND e.scope='course' WHERE $where_clause GROUP BY c.id ORDER BY c.course_code";
 $stmt=mysqli_prepare($conn,$query);
 mysqli_stmt_bind_param($stmt,$types,...$params);
 mysqli_stmt_execute($stmt);

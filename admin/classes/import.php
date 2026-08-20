@@ -30,8 +30,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'template') {
     header('Content-Disposition: attachment; filename="class_import_template.csv"');
     header('Pragma: no-cache');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['class_name', 'class_code', 'level_id']);
-    fputcsv($out, ['Year 1 Group A', 'Y1A', '1']);
+    fputcsv($out, ['class_name', 'level_id']);
+    fputcsv($out, ['Year 1 Group A', '1']);
     fclose($out);
     exit();
 }
@@ -72,9 +72,9 @@ function department_name(mysqli $conn, int $dept_id): string {
     return $row ? $row['dep_name'] : '';
 }
 
-function class_code_exists(mysqli $conn, string $code, int $dept_id): bool {
-    $stmt = mysqli_prepare($conn, "SELECT t_id FROM classes WHERE class_code=? AND department_id=? LIMIT 1");
-    mysqli_stmt_bind_param($stmt, "si", $code, $dept_id);
+function class_name_exists(mysqli $conn, string $name): bool {
+    $stmt = mysqli_prepare($conn, "SELECT t_id FROM classes WHERE class_name=? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, "s", $name);
     mysqli_stmt_execute($stmt);
     $found = mysqli_stmt_get_result($stmt)->num_rows > 0;
     mysqli_stmt_close($stmt);
@@ -107,12 +107,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
             "INSERT INTO classes (class_name, class_code, department_id, level_id, created_at)
              VALUES (?, ?, ?, ?, NOW())");
 
+        $class_code = ''; // classes.class_code is NOT NULL DEFAULT '' — no code used
         $inserted = 0;
         foreach ($preview as $row) {
             mysqli_stmt_bind_param($stmt_ins, "ssii",
-                $row['class_name'], $row['class_code'], $department_id, $row['level_id']);
+                $row['class_name'], $class_code, $department_id, $row['level_id']);
             if (!mysqli_stmt_execute($stmt_ins)) {
-                throw new RuntimeException("DB insert failed for {$row['class_code']}: " . mysqli_stmt_error($stmt_ins));
+                throw new RuntimeException("DB insert failed for {$row['class_name']}: " . mysqli_stmt_error($stmt_ins));
             }
             $inserted++;
         }
@@ -166,27 +167,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
         $selected_dept_name = department_name($conn, $selected_dept_id);
         $levels = get_levels_map($conn);
         $col = import_header_map($rows[0]);
-        $missing = array_diff(['class_name', 'class_code', 'level_id'], array_keys($col));
+        $missing = array_diff(['class_name', 'level_id'], array_keys($col));
         if (!empty($missing)) {
             $parse_errors[] = 'File is missing required columns: ' . implode(', ', $missing);
         } else {
-            $seen_codes = [];
+            $seen_names = [];
             $total = count($rows);
             for ($i = 1; $i < $total; $i++) {
                 if (count(array_filter(array_map('trim', $rows[$i]))) === 0) continue;
 
                 $class_name   = import_cell($rows[$i], $col, 'class_name');
-                $class_code   = import_cell($rows[$i], $col, 'class_code');
                 $level_id_raw = import_cell($rows[$i], $col, 'level_id');
 
                 $row_errors = [];
-                if ($class_name === '') $row_errors[] = 'Class name is required';
-                if ($class_code === '') {
-                    $row_errors[] = 'Class code is required';
-                } elseif (isset($seen_codes[strtolower($class_code)])) {
-                    $row_errors[] = 'Duplicate class code in this file';
-                } elseif (class_code_exists($conn, $class_code, $selected_dept_id)) {
-                    $row_errors[] = 'Class code already exists in this department';
+                if ($class_name === '') {
+                    $row_errors[] = 'Class name is required';
+                } elseif (isset($seen_names[strtolower($class_name)])) {
+                    $row_errors[] = 'Duplicate class name in this file';
+                } elseif (class_name_exists($conn, $class_name)) {
+                    $row_errors[] = 'Class name already exists';
                 }
 
                 $level_id = filter_var($level_id_raw, FILTER_VALIDATE_INT);
@@ -197,13 +196,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                 }
 
                 $is_valid = empty($row_errors);
-                if ($is_valid) { $valid_count++; $seen_codes[strtolower($class_code)] = true; }
+                if ($is_valid) { $valid_count++; $seen_names[strtolower($class_name)] = true; }
                 else $error_count++;
 
                 $preview_rows[] = [
                     'row'        => $i + 1,
                     'class_name' => $class_name,
-                    'class_code' => $class_code,
                     'level_id'   => $level_id !== false ? $level_id : 0,
                     'level_name' => ($level_id && isset($levels[$level_id])) ? $levels[$level_id] : $level_id_raw,
                     'valid'      => $is_valid,
@@ -217,7 +215,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                 $_SESSION['admin_import_preview_classes'] = array_values(array_filter(
                     array_map(function($r) { return $r['valid'] ? [
                         'class_name' => $r['class_name'],
-                        'class_code' => $r['class_code'],
                         'level_id'   => $r['level_id'],
                     ] : null; }, $preview_rows)
                 ));
@@ -303,13 +300,12 @@ tr.row-error{border-left:3px solid #dc3545}
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Row</th><th>Class Name</th><th>Class Code</th><th>Level</th><th>Status</th></tr></thead>
+            <thead><tr><th>Row</th><th>Class Name</th><th>Level</th><th>Status</th></tr></thead>
             <tbody>
             <?php foreach ($preview_rows as $pr): ?>
             <tr class="<?php echo $pr['valid'] ? 'row-valid' : 'row-error'; ?>">
                 <td><?php echo (int)$pr['row']; ?></td>
                 <td><?php echo htmlspecialchars($pr['class_name']); ?></td>
-                <td><?php echo htmlspecialchars($pr['class_code']); ?></td>
                 <td><?php echo htmlspecialchars($pr['level_name']); ?></td>
                 <td>
                     <?php if ($pr['valid']): ?>
@@ -356,12 +352,12 @@ tr.row-error{border-left:3px solid #dc3545}
 
     <div class="template-hint">
         <strong>Required columns:</strong>
-        <code>class_name</code>, <code>class_code</code>, <code>level_id</code>
+        <code>class_name</code>, <code>level_id</code>
         <span style="color:#888">(any order — matched by column heading)</span>
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
-            <li><code>class_code</code> must be unique within the selected department.</li>
+            <li><code>class_name</code> must be unique.</li>
             <li><code>level_id</code> must match a valid Level ID — see the reference table below.</li>
         </ul>
         <br>

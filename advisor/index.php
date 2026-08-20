@@ -40,7 +40,7 @@ $advisor_name = $_SESSION['full_name'];
 $department_id = $_SESSION['department_id'];
 
 // Set page title
-$page_title = 'Advisor Dashboard';
+$page_title = 'Lecturer Dashboard';
 
 // Get active academic period
 $query_period = "SELECT * FROM view_active_period LIMIT 1";
@@ -436,7 +436,7 @@ require_once '../includes/header.php';
 <!-- Page Header -->
 <div class="page-header">
     <h1>Welcome, <?php echo htmlspecialchars($advisor_name); ?></h1>
-    <p>Class Advisor Dashboard - <?php echo htmlspecialchars($active_year); ?>
+    <p>Lecturer Dashboard - <?php echo htmlspecialchars($active_year); ?>
        <?php if ($active_semester): ?>
            (<?php echo htmlspecialchars($active_semester); ?>)
        <?php endif; ?>

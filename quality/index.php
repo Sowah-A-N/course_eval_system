@@ -573,19 +573,23 @@ require_once '../includes/header.php';
 <!-- Category Performance -->
 <?php if (!empty($categories)): ?>
     <h2 class="section-title">Performance by Category</h2>
-    <div class="category-list">
+    <style>
+    .category-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+    .category-card{background:#fff;border:1px solid #ececf1;border-radius:10px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:10px}
+    .category-card .cc-name{font-weight:600;font-size:15px;color:#333}
+    .category-card .cc-rating{font-size:28px;font-weight:700;color:#667eea;line-height:1}
+    .category-card .cc-rating small{font-size:14px;color:#999;font-weight:500}
+    .category-card .cc-bar{height:8px;background:#eef0f5;border-radius:4px;overflow:hidden}
+    .category-card .cc-bar-fill{height:100%;background:linear-gradient(90deg,#667eea,#764ba2)}
+    .category-card .cc-count{font-size:12px;color:#999}
+    </style>
+    <div class="category-cards">
         <?php foreach ($categories as $cat): ?>
-            <div class="category-item">
-                <div class="category-header">
-                    <span class="category-name"><?php echo htmlspecialchars($cat['category']); ?></span>
-                    <span class="category-rating"><?php echo $cat['avg_rating']; ?> / 5.0</span>
-                </div>
-                <div class="category-bar">
-                    <div class="category-bar-fill" style="width: <?php echo ($cat['avg_rating'] / 5) * 100; ?>%;"></div>
-                </div>
-                <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                    Based on <?php echo $cat['response_count']; ?> responses
-                </div>
+            <div class="category-card">
+                <div class="cc-name"><?php echo htmlspecialchars($cat['category']); ?></div>
+                <div class="cc-rating"><?php echo $cat['avg_rating']; ?><small> / 5.0</small></div>
+                <div class="cc-bar"><div class="cc-bar-fill" style="width: <?php echo ($cat['avg_rating'] / 5) * 100; ?>%;"></div></div>
+                <div class="cc-count">Based on <?php echo $cat['response_count']; ?> responses</div>
             </div>
         <?php endforeach; ?>
     </div>

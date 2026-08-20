@@ -50,16 +50,18 @@ function get_levels_by_number(mysqli $conn): array {
     return $map;
 }
 
-/** Map UPPERCASE class_code → ['id'=>t_id,'name'=>class_name] for this department */
+/** Map UPPERCASE class_name → ['id'=>t_id,'name'=>class_name] for this department.
+ *  Classes are identified by name now (class codes were removed), so the CSV's
+ *  "class" column is matched against the class name. */
 function get_classes_by_code(mysqli $conn, int $dept_id): array {
     $stmt = mysqli_prepare($conn,
-        "SELECT t_id, class_name, class_code FROM classes WHERE department_id = ? ORDER BY class_name");
+        "SELECT t_id, class_name FROM classes WHERE department_id = ? ORDER BY class_name");
     mysqli_stmt_bind_param($stmt, "i", $dept_id);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     $map = [];
     while ($row = mysqli_fetch_assoc($res)) {
-        $map[strtoupper($row['class_code'])] = ['id' => (int)$row['t_id'], 'name' => $row['class_name']];
+        $map[strtoupper($row['class_name'])] = ['id' => (int)$row['t_id'], 'name' => $row['class_name']];
     }
     mysqli_stmt_close($stmt);
     return $map;
@@ -74,10 +76,20 @@ function email_exists(mysqli $conn, string $email): bool {
     return $found;
 }
 
-/** Generate a random unique_id that doesn't already exist in user_details */
+/**
+ * Generate a unique student ID of the form RMU + 9 random uppercase
+ * alphanumeric characters (A-Z, 0-9), retrying on collision against
+ * user_details.unique_id.
+ */
 function generate_unique_student_id(mysqli $conn): string {
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    $max      = strlen($alphabet) - 1;
     do {
-        $uid = strtoupper(bin2hex(random_bytes(5))); // 10-char hex, e.g. A3F2C91B4E
+        $suffix = '';
+        for ($i = 0; $i < 9; $i++) {
+            $suffix .= $alphabet[random_int(0, $max)];
+        }
+        $uid = 'RMU' . $suffix; // e.g. RMU4Z8QX1M2P
         $stmt = mysqli_prepare($conn, "SELECT user_id FROM user_details WHERE unique_id = ? LIMIT 1");
         mysqli_stmt_bind_param($stmt, "s", $uid);
         mysqli_stmt_execute($stmt);
@@ -123,9 +135,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
              VALUES (?,?,?,?,?,?,?,?,?,?,1,1,NOW())"
         );
 
+        // Students have NO username (NULL) — they sign in with their email.
+        $username = null;
+
         foreach ($preview as $row) {
             $unique_id = generate_unique_student_id($conn);
-            $username  = ces_derive_username($conn, $row['f_name'], $row['l_name']);
 
             mysqli_stmt_bind_param($stmt_ins, "ssssssiiii",
                 $username,
@@ -145,10 +159,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
             }
 
             $credentials[] = [
-                'name'     => $row['f_name'] . ' ' . $row['l_name'],
-                'email'    => $row['email'],
-                'username' => $username,
-                'password' => DEFAULT_IMPORT_PASSWORD,
+                'name'       => $row['f_name'] . ' ' . $row['l_name'],
+                'email'      => $row['email'],
+                'username'   => '', // students sign in with email; mailer falls back to it
+                'student_id' => $unique_id,
+                'password'   => DEFAULT_IMPORT_PASSWORD,
             ];
         }
 
@@ -379,11 +394,11 @@ tr.row-error{border-left:3px solid #dc3545}
     <h2>Import Successful</h2>
     <p><?php echo count($import_credentials); ?> student account(s) created. Every student was given the default password <code><?php echo htmlspecialchars(DEFAULT_IMPORT_PASSWORD); ?></code> and must change it on first login.</p>
     <p style="margin:0 0 16px;font-size:14px;color:#166534">📧 Login details emailed to <strong><?php echo (int)$import_emailed; ?></strong> of <?php echo count($import_credentials); ?> student(s).<?php if ($import_emailed < count($import_credentials)): ?> Share the details below with anyone who didn't receive it.<?php endif; ?></p>
-    <p class="warn-note">Share each student's <strong>username</strong> along with the default password above so they can sign in.</p>
+    <p class="warn-note">Students sign in with their <strong>email</strong> and the default password above. Share both so they can sign in.</p>
     <div class="table-wrap" id="creds-table-wrap">
         <table id="creds-table">
             <thead>
-                <tr><th>#</th><th>Name</th><th>Email</th><th>Username</th><th>Default Password</th></tr>
+                <tr><th>#</th><th>Name</th><th>Email</th><th>Student ID</th><th>Default Password</th></tr>
             </thead>
             <tbody>
                 <?php foreach ($import_credentials as $i => $c): ?>
@@ -391,7 +406,7 @@ tr.row-error{border-left:3px solid #dc3545}
                     <td><?php echo $i + 1; ?></td>
                     <td><?php echo htmlspecialchars($c['name']); ?></td>
                     <td><?php echo htmlspecialchars($c['email']); ?></td>
-                    <td><code><?php echo htmlspecialchars($c['username']); ?></code></td>
+                    <td><code><?php echo htmlspecialchars($c['student_id']); ?></code></td>
                     <td><code><?php echo htmlspecialchars($c['password']); ?></code></td>
                 </tr>
                 <?php endforeach; ?>
@@ -407,13 +422,13 @@ tr.row-error{border-left:3px solid #dc3545}
 <script>
 (function(){
     var data = <?php echo json_encode(array_map(function($c) { return [
-        htmlspecialchars($c['name'],     ENT_QUOTES),
-        htmlspecialchars($c['email'],    ENT_QUOTES),
-        htmlspecialchars($c['username'], ENT_QUOTES),
-        htmlspecialchars($c['password'], ENT_QUOTES),
+        htmlspecialchars($c['name'],       ENT_QUOTES),
+        htmlspecialchars($c['email'],      ENT_QUOTES),
+        htmlspecialchars($c['student_id'], ENT_QUOTES),
+        htmlspecialchars($c['password'],   ENT_QUOTES),
     ]; }, $import_credentials), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>;
     window.downloadCredsCsv = function(){
-        var rows = [['Name','Email','Username','Temp Password']].concat(data);
+        var rows = [['Name','Email','Student ID','Temp Password']].concat(data);
         var csv  = rows.map(function(r){
             return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
         }).join('\r\n');
@@ -504,7 +519,7 @@ tr.row-error{border-left:3px solid #dc3545}
 
 <div class="card">
     <p class="card-title">Upload CSV or Excel File</p>
-    <p class="card-subtitle">Import multiple students by uploading a correctly formatted CSV (.csv) or Excel (.xlsx) file. Student IDs and usernames are assigned automatically.</p>
+    <p class="card-subtitle">Import multiple students by uploading a correctly formatted CSV (.csv) or Excel (.xlsx) file. Student IDs are assigned automatically; students sign in with their email.</p>
 
     <div class="template-hint">
         <strong>Required columns:</strong>
