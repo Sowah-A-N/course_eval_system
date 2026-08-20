@@ -626,7 +626,7 @@ require_once '../../includes/header.php';
         <li>Your identity is never revealed to lecturers or administrators</li>
         <li>Responses are aggregated with other students' feedback</li>
         <li>Individual responses are only displayed when at least 5 students have submitted evaluations</li>
-        <li>Evaluation tokens ensure anonymity while preventing duplicate submissions</li>
+        <li>Your answers are stored separately from your identity, so responses stay anonymous while duplicate submissions are still prevented</li>
         <li>Once submitted, evaluations <strong>cannot be edited or deleted</strong></li>
     </ul>
 </div>

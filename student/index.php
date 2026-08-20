@@ -87,94 +87,91 @@ $level_name = $student_info['level_name'] ?? 'Not Assigned';
 $class_name = $student_info['class_name'] ?? 'Not Assigned';
 $department_name = $student_info['dep_name'] ?? 'Not Assigned';
 
-// Get total evaluation tokens
-$query_total = "
-    SELECT COUNT(*) as total_tokens
-    FROM evaluation_tokens
-    WHERE student_user_id = ?
-";
+// Evaluation progress for the ACTIVE period (tokenless completion model).
+// "total" = eligible evaluations (the student's dept+level courses, plus the
+// once-per-semester administrative evaluation); "completed" = completion records.
+$total_tokens          = 0;
+$completed_tokens      = 0;
+$pending_tokens        = 0;
+$completion_percentage = 0;
+$pending_evaluations   = [];
+$recent_evaluations    = [];
 
-$stmt_total = mysqli_prepare($conn, $query_total);
-mysqli_stmt_bind_param($stmt_total, "i", $student_id);
-mysqli_stmt_execute($stmt_total);
-$result_total = mysqli_stmt_get_result($stmt_total);
-$total_data = mysqli_fetch_assoc($result_total);
-$total_tokens = $total_data['total_tokens'];
-mysqli_stmt_close($stmt_total);
+$active = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM view_active_period LIMIT 1"));
 
-// Get completed evaluations count
-$query_completed = "
-    SELECT COUNT(*) as completed_tokens
-    FROM evaluation_tokens
-    WHERE student_user_id = ?
-    AND is_used = 1
-";
+// The student's department + level drive eligibility.
+$stmt_dl = mysqli_prepare($conn, "SELECT department_id, level_id FROM user_details WHERE user_id = ? LIMIT 1");
+mysqli_stmt_bind_param($stmt_dl, "i", $student_id);
+mysqli_stmt_execute($stmt_dl);
+$dl = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_dl));
+mysqli_stmt_close($stmt_dl);
+$dep = (int)($dl['department_id'] ?? 0);
+$lvl = (int)($dl['level_id'] ?? 0);
 
-$stmt_completed = mysqli_prepare($conn, $query_completed);
-mysqli_stmt_bind_param($stmt_completed, "i", $student_id);
-mysqli_stmt_execute($stmt_completed);
-$result_completed = mysqli_stmt_get_result($stmt_completed);
-$completed_data = mysqli_fetch_assoc($result_completed);
-$completed_tokens = $completed_data['completed_tokens'];
-mysqli_stmt_close($stmt_completed);
+if ($active) {
+    $ay = (int)$active['academic_year_id'];
+    $sm = (int)$active['semester_id'];
 
-// Calculate pending evaluations
-$pending_tokens = $total_tokens - $completed_tokens;
+    $elig_courses = 0;
+    if ($dep && $lvl) {
+        $st = mysqli_prepare($conn, "SELECT COUNT(*) AS n FROM courses WHERE department_id = ? AND level_id = ?");
+        mysqli_stmt_bind_param($st, "ii", $dep, $lvl);
+        mysqli_stmt_execute($st);
+        $elig_courses = (int)(mysqli_fetch_assoc(mysqli_stmt_get_result($st))['n'] ?? 0);
+        mysqli_stmt_close($st);
+    }
+    $has_admin = ((int)(mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COUNT(*) AS n FROM evaluation_questions WHERE is_active = 1 AND scope = 'administrative'"))['n'] ?? 0) > 0) ? 1 : 0;
 
-// Calculate completion percentage
-$completion_percentage = $total_tokens > 0 ? round(($completed_tokens / $total_tokens) * 100, 1) : 0;
+    $total_tokens = $elig_courses + $has_admin;
 
-// Get pending evaluations with course details (limited to 5 for display)
-$query_pending = "
-    SELECT
-        et.token_id,
-        et.token,
-        c.course_code,
-        c.name as course_name,
-        l.level_name,
-        s.semester_name,
-        et.created_at
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
-    LEFT JOIN level l ON c.level_id = l.t_id
-    LEFT JOIN semesters s ON et.semester_id = s.semester_id
-    WHERE et.student_user_id = ?
-    AND et.is_used = 0
-    ORDER BY et.created_at DESC
-    LIMIT 5
-";
+    $st = mysqli_prepare($conn, "SELECT COUNT(*) AS n FROM evaluation_completions WHERE student_user_id = ? AND academic_year_id = ? AND semester_id = ?");
+    mysqli_stmt_bind_param($st, "iii", $student_id, $ay, $sm);
+    mysqli_stmt_execute($st);
+    $completed_tokens = (int)(mysqli_fetch_assoc(mysqli_stmt_get_result($st))['n'] ?? 0);
+    mysqli_stmt_close($st);
 
-$stmt_pending = mysqli_prepare($conn, $query_pending);
-mysqli_stmt_bind_param($stmt_pending, "i", $student_id);
-mysqli_stmt_execute($stmt_pending);
-$result_pending = mysqli_stmt_get_result($stmt_pending);
-$pending_evaluations = [];
-while ($row = mysqli_fetch_assoc($result_pending)) {
-    $pending_evaluations[] = $row;
+    $pending_tokens = max(0, $total_tokens - $completed_tokens);
+    $completion_percentage = $total_tokens > 0 ? round(($completed_tokens / $total_tokens) * 100, 1) : 0;
+
+    // Pending course evaluations (not yet completed) — up to 5 for the list.
+    if ($dep && $lvl) {
+        $st = mysqli_prepare($conn,
+            "SELECT c.id AS course_id, c.course_code, c.name AS course_name, l.level_name, c.created_at
+             FROM courses c
+             LEFT JOIN level l ON c.level_id = l.t_id
+             LEFT JOIN evaluation_completions ec
+                    ON ec.student_user_id = ? AND ec.course_id = c.id
+                   AND ec.academic_year_id = ? AND ec.semester_id = ?
+             WHERE c.department_id = ? AND c.level_id = ? AND ec.completion_id IS NULL
+             ORDER BY c.course_code
+             LIMIT 5");
+        mysqli_stmt_bind_param($st, "iiiii", $student_id, $ay, $sm, $dep, $lvl);
+        mysqli_stmt_execute($st);
+        $rp = mysqli_stmt_get_result($st);
+        while ($row = mysqli_fetch_assoc($rp)) {
+            $row['semester_name'] = $active['semester_name'];
+            $pending_evaluations[] = $row;
+        }
+        mysqli_stmt_close($st);
+    }
 }
-mysqli_stmt_close($stmt_pending);
 
-// Get recent completed evaluations (last 5)
-$query_recent = "
-    SELECT
-        et.used_at,
-        c.course_code,
-        c.name as course_name,
-        l.level_name
-    FROM evaluation_tokens et
-    JOIN courses c ON et.course_id = c.id
-    LEFT JOIN level l ON c.level_id = l.t_id
-    WHERE et.student_user_id = ?
-    AND et.is_used = 1
-    ORDER BY et.used_at DESC
-    LIMIT 5
-";
-
-$stmt_recent = mysqli_prepare($conn, $query_recent);
+// Recent completed evaluations (any period) — from completion records.
+$stmt_recent = mysqli_prepare($conn,
+    "SELECT ec.completed_at AS used_at,
+            COALESCE(c.course_code, 'INSTITUTIONAL') AS course_code,
+            COALESCE(c.name, 'Administrative & Services Evaluation') AS course_name,
+            COALESCE(l.level_name, 'All services') AS level_name
+     FROM evaluation_completions ec
+     LEFT JOIN courses c ON ec.course_id = c.id AND ec.course_id <> 0
+     LEFT JOIN level l ON c.level_id = l.t_id
+     WHERE ec.student_user_id = ?
+     ORDER BY ec.completed_at DESC
+     LIMIT 5");
 mysqli_stmt_bind_param($stmt_recent, "i", $student_id);
 mysqli_stmt_execute($stmt_recent);
 $result_recent = mysqli_stmt_get_result($stmt_recent);
-$recent_evaluations = [];
 while ($row = mysqli_fetch_assoc($result_recent)) {
     $recent_evaluations[] = $row;
 }
@@ -557,9 +554,12 @@ require_once '../includes/header.php';
                         </div>
                     </div>
                     <div class="evaluation-action">
-                        <a href="evaluate/submit.php?token=<?php echo urlencode($eval['token']); ?>" class="btn-evaluate">
-                            Evaluate Now
-                        </a>
+                        <form method="POST" action="evaluate/submit.php" style="margin:0">
+                            <?php csrf_token_input(); ?>
+                            <input type="hidden" name="scope" value="course">
+                            <input type="hidden" name="course_id" value="<?php echo (int)$eval['course_id']; ?>">
+                            <button type="submit" class="btn-evaluate">Evaluate Now</button>
+                        </form>
                     </div>
                 </div>
             <?php endforeach; ?>
