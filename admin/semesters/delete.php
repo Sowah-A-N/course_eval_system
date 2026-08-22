@@ -15,12 +15,12 @@ mysqli_stmt_execute($stmt);
 $semester=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if(!$semester){$_SESSION['flash_message']='Semester not found.';header("Location:list.php");exit();}
-$query_tokens="SELECT COUNT(*)as count FROM evaluation_tokens WHERE semester_id=?";
-$stmt_tokens=mysqli_prepare($conn,$query_tokens);
-mysqli_stmt_bind_param($stmt_tokens,"i",$semester_id);
-mysqli_stmt_execute($stmt_tokens);
-$token_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_tokens))['count'];
-mysqli_stmt_close($stmt_tokens);
+$query_evals="SELECT COUNT(*)as count FROM evaluations WHERE semester_id=?";
+$stmt_evals=mysqli_prepare($conn,$query_evals);
+mysqli_stmt_bind_param($stmt_evals,"i",$semester_id);
+mysqli_stmt_execute($stmt_evals);
+$eval_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_evals))['count'];
+mysqli_stmt_close($stmt_evals);
 $query_courses="SELECT COUNT(*)as count FROM courses WHERE semester_id=?";
 $stmt_courses=mysqli_prepare($conn,$query_courses);
 mysqli_stmt_bind_param($stmt_courses,"i",$semester_id);
@@ -29,8 +29,8 @@ $course_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_courses))['count']
 mysqli_stmt_close($stmt_courses);
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
-if($token_count>0||$course_count>0){
-$_SESSION['flash_message']='Cannot delete semester with tokens or courses.';
+if($eval_count>0||$course_count>0){
+$_SESSION['flash_message']='Cannot delete semester with submitted evaluations or courses.';
 $_SESSION['flash_type']='error';
 header("Location:list.php");
 exit();
@@ -65,11 +65,11 @@ require_once '../../includes/header.php';
 <div style="padding:20px;background:#f8f9fa;border-radius:8px;margin:20px 0;text-align:left">
 <strong>Semester Name:</strong> <?php echo htmlspecialchars($semester['semester_name']);?><br>
 <strong>Semester Value:</strong> <?php echo $semester['semester_value'];?><br>
-<strong>Evaluation Tokens:</strong> <?php echo $token_count;?><br>
+<strong>Submitted Evaluations:</strong> <?php echo $eval_count;?><br>
 <strong>Courses:</strong> <?php echo $course_count;?>
 </div>
-<?php if($token_count>0||$course_count>0): ?>
-<p style="color:#dc3545;font-weight:600">Cannot delete! This semester has <?php echo $token_count;?> token(s) and <?php echo $course_count;?> course(s).</p>
+<?php if($eval_count>0||$course_count>0): ?>
+<p style="color:#dc3545;font-weight:600">Cannot delete! This semester has <?php echo $eval_count;?> submitted evaluation(s) and <?php echo $course_count;?> course(s).</p>
 <a href="list.php" class="btn btn-secondary">Back to List</a>
 <?php else: ?>
 <p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>

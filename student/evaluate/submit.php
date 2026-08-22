@@ -6,14 +6,14 @@
  * This is the main evaluation form where students submit their course evaluations.
  *
  * Features:
- * - Token validation (ensures valid, unused token for correct student)
+ * - Eligibility check (student may only evaluate their own courses / services)
  * - Display course information
  * - Load all active evaluation questions grouped by category
  * - Rating scale (1-5) for each question
  * - CSRF protection
  * - Form validation (all questions required)
  * - Database transaction (atomic operation)
- * - Mark token as used after successful submission
+ * - Record an anonymous completion so the same evaluation can't be submitted twice
  * - Redirect to success page
  *
  * Role Required: ROLE_STUDENT

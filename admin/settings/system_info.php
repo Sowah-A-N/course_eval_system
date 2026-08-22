@@ -12,7 +12,6 @@ $query_stats="
 SELECT 
 (SELECT COUNT(*) FROM user_details) as total_users,
 (SELECT COUNT(*) FROM courses) as total_courses,
-(SELECT COUNT(*) FROM evaluation_tokens) as total_tokens,
 (SELECT COUNT(*) FROM evaluations) as total_evaluations,
 (SELECT COUNT(*) FROM evaluation_questions) as total_questions
 ";
@@ -60,10 +59,6 @@ td:first-child{font-weight:600;width:300px}
 <div class="info-card">
 <div class="info-value"><?php echo number_format($stats['total_courses']);?></div>
 <div class="info-label">Courses</div>
-</div>
-<div class="info-card">
-<div class="info-value"><?php echo number_format($stats['total_tokens']);?></div>
-<div class="info-label">Eval Tokens</div>
 </div>
 <div class="info-card">
 <div class="info-value"><?php echo number_format($stats['total_evaluations']);?></div>
@@ -150,10 +145,6 @@ td:first-child{font-weight:600;width:300px}
 <tr>
 <td>Password Min Length</td>
 <td><?php echo PASSWORD_MIN_LENGTH;?> characters</td>
-</tr>
-<tr>
-<td>Token Length</td>
-<td><?php echo TOKEN_LENGTH;?> bytes (<?php echo TOKEN_LENGTH*2;?> character hex)</td>
 </tr>
 </table>
 </div>

@@ -23,10 +23,10 @@ header("Location:list.php");
 exit();
 }
 // Count dependent records
-$stmt_tk=mysqli_prepare($conn,"SELECT COUNT(*) AS cnt FROM evaluation_tokens WHERE student_user_id=?");
+$stmt_tk=mysqli_prepare($conn,"SELECT COUNT(*) AS cnt FROM evaluation_completions WHERE student_user_id=?");
 mysqli_stmt_bind_param($stmt_tk,"i",$user_id);
 mysqli_stmt_execute($stmt_tk);
-$token_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_tk))['cnt'];
+$eval_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_tk))['cnt'];
 mysqli_stmt_close($stmt_tk);
 $stmt_al=mysqli_prepare($conn,"SELECT COUNT(*) AS cnt FROM advisor_levels WHERE advisor_id=?");
 mysqli_stmt_bind_param($stmt_al,"i",$user_id);
@@ -35,8 +35,8 @@ $advisor_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_al))['cnt'];
 mysqli_stmt_close($stmt_al);
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
-if($token_count>0){
-$_SESSION['flash_message']='Cannot delete: user has '.$token_count.' evaluation token(s). Deactivate the account instead.';
+if($eval_count>0){
+$_SESSION['flash_message']='Cannot delete: user has '.$eval_count.' evaluation record(s). Deactivate the account instead.';
 $_SESSION['flash_type']='error';
 header("Location:list.php");
 exit();
@@ -88,8 +88,8 @@ require_once '../../includes/header.php';
 <strong>Email:</strong> <?php echo htmlspecialchars($user['email']);?><br>
 <strong>Role:</strong> <?php echo htmlspecialchars(ROLE_NAMES[$user['role_id']]??'Unknown');?>
 </div>
-<?php if($token_count>0): ?>
-<p style="color:#dc3545;font-weight:600">Cannot delete: this user has <?php echo $token_count;?> evaluation token(s). Deactivate the account instead.</p>
+<?php if($eval_count>0): ?>
+<p style="color:#dc3545;font-weight:600">Cannot delete: this user has <?php echo $eval_count;?> evaluation record(s). Deactivate the account instead.</p>
 <a href="list.php" class="btn btn-secondary">Back to List</a>
 <?php else: ?>
 <p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>

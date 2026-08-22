@@ -84,26 +84,27 @@ if (!$student) {
     exit();
 }
 
-// Get evaluation statistics
-$query_stats = "
-    SELECT
-        COUNT(*) as total_evaluations,
-        SUM(CASE WHEN is_used = 1 THEN 1 ELSE 0 END) as completed_evaluations,
-        SUM(CASE WHEN is_used = 0 THEN 1 ELSE 0 END) as pending_evaluations
-    FROM evaluation_tokens
-    WHERE student_user_id = ?
-";
+// Evaluation statistics (tokenless): how many course evaluations this student
+// is eligible for (courses in their department + level) versus how many they
+// have already submitted (recorded in evaluation_completions).
+$query_total = "SELECT COUNT(*) AS n FROM courses c
+    JOIN user_details u ON u.user_id = ?
+    WHERE c.department_id = u.department_id AND c.level_id = u.level_id";
+$stmt_t = mysqli_prepare($conn, $query_total);
+mysqli_stmt_bind_param($stmt_t, "i", $student_id);
+mysqli_stmt_execute($stmt_t);
+$total_evaluations = intval(mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_t))['n']);
+mysqli_stmt_close($stmt_t);
 
-$stmt_stats = mysqli_prepare($conn, $query_stats);
-mysqli_stmt_bind_param($stmt_stats, "i", $student_id);
-mysqli_stmt_execute($stmt_stats);
-$result_stats = mysqli_stmt_get_result($stmt_stats);
-$stats = mysqli_fetch_assoc($result_stats);
-mysqli_stmt_close($stmt_stats);
+$query_done = "SELECT COUNT(*) AS n FROM evaluation_completions
+    WHERE student_user_id = ? AND course_id > 0";
+$stmt_d = mysqli_prepare($conn, $query_done);
+mysqli_stmt_bind_param($stmt_d, "i", $student_id);
+mysqli_stmt_execute($stmt_d);
+$completed_evaluations = intval(mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_d))['n']);
+mysqli_stmt_close($stmt_d);
 
-$total_evaluations = $stats['total_evaluations'];
-$completed_evaluations = $stats['completed_evaluations'];
-$pending_evaluations = $stats['pending_evaluations'];
+$pending_evaluations = max(0, $total_evaluations - $completed_evaluations);
 $completion_rate = $total_evaluations > 0 ? round(($completed_evaluations / $total_evaluations) * 100, 1) : 0;
 
 // Set breadcrumb

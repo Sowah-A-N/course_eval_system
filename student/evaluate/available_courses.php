@@ -7,7 +7,7 @@
  * Shows pending (not yet evaluated) and completed evaluations.
  *
  * Features:
- * - List all evaluation tokens for the student
+ * - List all evaluations the student is eligible to complete
  * - Show pending evaluations with "Evaluate Now" button
  * - Show completed evaluations with submission date
  * - Filter by status (all, pending, completed)

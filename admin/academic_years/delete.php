@@ -15,16 +15,16 @@ mysqli_stmt_execute($stmt);
 $year=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if(!$year){$_SESSION['flash_message']='Academic year not found.';header("Location:list.php");exit();}
-$query_tokens="SELECT COUNT(*)as count FROM evaluation_tokens WHERE academic_year_id=?";
-$stmt_tokens=mysqli_prepare($conn,$query_tokens);
-mysqli_stmt_bind_param($stmt_tokens,"i",$year_id);
-mysqli_stmt_execute($stmt_tokens);
-$token_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_tokens))['count'];
-mysqli_stmt_close($stmt_tokens);
+$query_evals="SELECT COUNT(*)as count FROM evaluations WHERE academic_year_id=?";
+$stmt_evals=mysqli_prepare($conn,$query_evals);
+mysqli_stmt_bind_param($stmt_evals,"i",$year_id);
+mysqli_stmt_execute($stmt_evals);
+$eval_count=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_evals))['count'];
+mysqli_stmt_close($stmt_evals);
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token()){$_SESSION['flash_message']='Invalid token.';header("Location:list.php");exit();}
-if($token_count>0){
-$_SESSION['flash_message']='Cannot delete academic year with evaluation tokens.';
+if($eval_count>0){
+$_SESSION['flash_message']='Cannot delete academic year with submitted evaluations.';
 $_SESSION['flash_type']='error';
 header("Location:list.php");
 exit();
@@ -59,10 +59,10 @@ require_once '../../includes/header.php';
 <div style="padding:20px;background:#f8f9fa;border-radius:8px;margin:20px 0;text-align:left">
 <strong>Year:</strong> <?php echo htmlspecialchars($year['year_label']);?><br>
 <strong>Period:</strong> <?php echo date('M Y',strtotime($year['year_start']));?> - <?php echo date('M Y',strtotime($year['year_end']));?><br>
-<strong>Evaluation Tokens:</strong> <?php echo $token_count;?>
+<strong>Submitted Evaluations:</strong> <?php echo $eval_count;?>
 </div>
-<?php if($token_count>0): ?>
-<p style="color:#dc3545;font-weight:600">Cannot delete! This year has <?php echo $token_count;?> evaluation token(s).</p>
+<?php if($eval_count>0): ?>
+<p style="color:#dc3545;font-weight:600">Cannot delete! This year has <?php echo $eval_count;?> submitted evaluation(s).</p>
 <a href="list.php" class="btn btn-secondary">Back to List</a>
 <?php else: ?>
 <p style="color:#dc3545;font-weight:600">This action cannot be undone!</p>

@@ -86,14 +86,13 @@ mysqli_stmt_close($stmt);
 foreach ($lecturers as &$lecturer) {
     $query_stats = "
         SELECT
-            COUNT(DISTINCT et.token_id) as total_evals,
+            COUNT(DISTINCT e.evaluation_id) as total_evals,
             AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating
-        FROM evaluation_tokens et
-        JOIN evaluations e ON et.token = e.token
+        FROM evaluations e
         JOIN responses r ON e.evaluation_id = r.evaluation_id
-        JOIN course_lecturers cl ON et.course_id = cl.course_id
+        JOIN course_lecturers cl ON e.course_id = cl.course_id
         WHERE cl.lecturer_user_id = ?
-        AND et.is_used = 1
+        AND e.scope = 'course'
     ";
 
     $stmt_stats = mysqli_prepare($conn, $query_stats);

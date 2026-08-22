@@ -143,11 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export'])) {
 
             $query = "
                 SELECT c.course_code, c.name, l.level_name, s.semester_name, c.credit_hours,
-                       COUNT(DISTINCT et.token_id) as eval_count
+                       COUNT(DISTINCT et.evaluation_id) as eval_count
                 FROM courses c
                 LEFT JOIN level l ON c.level_id = l.t_id
                 LEFT JOIN semesters s ON c.semester_id = s.semester_id
-                LEFT JOIN evaluation_tokens et ON c.id = et.course_id
+                LEFT JOIN evaluations et ON c.id = et.course_id AND et.scope = 'course'
                 WHERE c.department_id = ?
                 GROUP BY c.id
                 ORDER BY c.course_code

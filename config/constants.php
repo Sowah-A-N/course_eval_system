@@ -93,14 +93,6 @@ define('ROLE_NAMES', [
 define('MIN_RESPONSE_COUNT', 5);
 
 /**
- * Maximum tokens that may be generated in a single bulk operation.
- * Prevents a single mis-click from flooding the evaluation_tokens table
- * (e.g. wrong department selected for a large cohort).
- * Adjust upward if RMU's largest department × course combination exceeds this.
- */
-define('MAX_BULK_TOKEN_GENERATION', 2000);
-
-/**
  * Password Reset Token TTL (seconds)
  * How long a reset link remains valid after it is issued.
  */
@@ -123,12 +115,6 @@ define('RATING_LABELS', [
     4 => 'Good',
     5 => 'Excellent'
 ]);
-
-/**
- * Token Length
- * Length of evaluation token in bytes (will be doubled when converted to hex)
- */
-define('TOKEN_LENGTH', 32);  // Results in 64-character hex string
 
 // ============================================
 // SESSION CONFIGURATION
@@ -408,7 +394,6 @@ define('TABLE_ROLES', 'roles');
 define('TABLE_USER_DETAILS', 'user_details');
 define('TABLE_ADVISOR_LEVELS', 'advisor_levels');
 define('TABLE_COURSE_LECTURERS', 'course_lecturers');
-define('TABLE_EVALUATION_TOKENS', 'evaluation_tokens');
 define('TABLE_EVALUATIONS', 'evaluations');
 define('TABLE_EVALUATION_QUESTIONS', 'evaluation_questions');
 define('TABLE_RESPONSES', 'responses');
@@ -440,7 +425,6 @@ define('MSG_ERROR_INVALID_LOGIN', 'Invalid username or password.');
 define('MSG_ERROR_ACCOUNT_LOCKED', 'Your account has been locked due to too many failed login attempts. Please try again later.');
 define('MSG_ERROR_SESSION_EXPIRED', 'Your session has expired. Please login again.');
 define('MSG_ERROR_INVALID_CSRF', 'Invalid request. Please try again.');
-define('MSG_ERROR_INVALID_TOKEN', 'Invalid or expired token.');
 define('MSG_ERROR_REQUIRED_FIELDS', 'Please fill in all required fields.');
 define('MSG_ERROR_INVALID_EMAIL', 'Please enter a valid email address.');
 define('MSG_ERROR_PASSWORD_MISMATCH', 'Passwords do not match.');
@@ -481,7 +465,6 @@ define('AUDIT_EXPORT', 'EXPORT');
 define('AUDIT_PASSWORD_CHANGE', 'PASSWORD_CHANGE');
 define('AUDIT_EVALUATION_SUBMIT', 'EVALUATION_SUBMIT');
 define('AUDIT_LECTURER_ASSIGN', 'LECTURER_ASSIGN');
-define('AUDIT_TOKEN_GENERATE', 'TOKEN_GENERATE');
 define('AUDIT_USER_CREATE',    'USER_CREATE');
 define('AUDIT_USER_UPDATE',    'USER_UPDATE');
 define('AUDIT_USER_DELETE',    'USER_DELETE');
