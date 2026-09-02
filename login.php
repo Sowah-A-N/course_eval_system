@@ -42,7 +42,25 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role_id'])) {
 
 // Initialize variables
 $error = '';
+$notice = '';
 $username_email = '';
+
+// Messages that arrive via redirect (GET), not from a submitted form. session.php
+// bounces expired/invalid sessions here; logout.php sends ?logout=success. Without
+// this the user would land on a blank login form with no idea why. Values are
+// matched against fixed strings and mapped to fixed messages (never echoed), so
+// there is no injection risk.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $redirect_reason = $_GET['error'] ?? '';
+    if ($redirect_reason === 'session_expired') {
+        $error = 'Your session expired due to inactivity. Please sign in again.';
+    } elseif ($redirect_reason === 'session_invalid') {
+        $error = 'Your session is no longer valid. Please sign in again.';
+    }
+    if (($_GET['logout'] ?? '') === 'success') {
+        $notice = 'You have been signed out successfully.';
+    }
+}
 
 // Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -304,6 +322,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             --color-error-border: #fca5a5;
             --color-error-text:   #b91c1c;
 
+            --color-success-bg:     #f0fdf4;
+            --color-success-border: #86efac;
+            --color-success-text:   #15803d;
+
             --radius-sm:  4px;
             --radius-md:  8px;
             --radius-lg:  12px;
@@ -419,6 +441,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             background: var(--color-error-bg);
             border: 1px solid var(--color-error-border);
             color: var(--color-error-text);
+        }
+
+        .alert--success {
+            background: var(--color-success-bg);
+            border: 1px solid var(--color-success-border);
+            color: var(--color-success-text);
         }
 
         .alert__icon {
@@ -636,6 +664,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
 
             <div class="card__body">
+
+                <!-- Success / info notice (logout, etc.) -->
+                <?php if (!empty($notice)): ?>
+                    <div class="alert alert--success" role="status" aria-live="polite">
+                        <span class="alert__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </span>
+                        <span><?php echo htmlspecialchars($notice, ENT_QUOTES, 'UTF-8'); ?></span>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Error Alert -->
                 <?php if (!empty($error)): ?>

@@ -30,40 +30,22 @@ require_once '../../includes/header.php';
 <strong>ℹ️ Note:</strong> Some settings require server access or database changes. Always backup before making configuration changes.
 </div>
 <div class="settings-grid">
-<div class="setting-card unavailable">
-<div class="setting-icon">🎓</div>
-<div class="setting-title">Institution Information</div>
-<div class="setting-desc">Configure institution name, logo, contact details, and branding</div>
-<span class="btn btn-muted">Coming Soon</span>
-</div>
-<div class="setting-card unavailable">
-<div class="setting-icon">🔒</div>
-<div class="setting-title">Security Settings</div>
-<div class="setting-desc">Configure session timeout, password policies, and security parameters</div>
-<span class="btn btn-muted">Coming Soon</span>
-</div>
-<div class="setting-card unavailable">
-<div class="setting-icon">📧</div>
-<div class="setting-title">Email Configuration</div>
-<div class="setting-desc">Set up email server, templates, and notification preferences</div>
-<span class="btn btn-muted">Coming Soon</span>
-</div>
-<div class="setting-card unavailable">
-<div class="setting-icon">🎨</div>
-<div class="setting-title">Appearance &amp; Theme</div>
-<div class="setting-desc">Customize colors, fonts, logo, and user interface elements</div>
-<span class="btn btn-muted">Coming Soon</span>
-</div>
-<div class="setting-card unavailable">
+<div class="setting-card">
 <div class="setting-icon">📊</div>
-<div class="setting-title">Evaluation Settings</div>
-<div class="setting-desc">Configure evaluation periods, anonymity threshold, and rating scales</div>
-<span class="btn btn-muted">Coming Soon</span>
+<div class="setting-title">System Information</div>
+<div class="setting-desc">View the application version, PHP and database details, and live record counts.</div>
+<a href="system_info.php" class="btn">View System Info</a>
+</div>
+<div class="setting-card">
+<div class="setting-icon">📋</div>
+<div class="setting-title">System Constants</div>
+<div class="setting-desc">Review the configured constants — session timeout, password policy, anonymity threshold, and more.</div>
+<a href="constants.php" class="btn">View Constants</a>
 </div>
 <div class="setting-card">
 <div class="setting-icon">🔧</div>
 <div class="setting-title">System Maintenance</div>
-<div class="setting-desc">Enable maintenance mode, backup database, view system logs</div>
+<div class="setting-desc">Enable maintenance mode, back up the database, and view system logs.</div>
 <a href="maintenance.php" class="btn">Maintenance Tools</a>
 </div>
 </div>
