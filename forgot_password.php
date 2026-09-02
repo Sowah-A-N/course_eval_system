@@ -125,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Reset your <?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?> password. Enter your email address to receive a reset link.">
     <meta name="robots" content="noindex, nofollow">
     <title>Forgot Password &mdash; <?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
     <style>

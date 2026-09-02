@@ -125,6 +125,7 @@ if ($token_valid && $_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Set a new password for your <?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?> account.">
     <meta name="robots" content="noindex, nofollow">
     <title>Set New Password &mdash; <?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
     <style>

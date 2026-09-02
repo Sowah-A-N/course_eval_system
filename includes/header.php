@@ -153,7 +153,7 @@ foreach ($_modules as $_mod => $_len) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="description" content="<?php echo APP_NAME; ?> - <?php echo INSTITUTION_NAME; ?>">
+    <meta name="description" content="<?php echo htmlspecialchars(APP_NAME . ' — course evaluation management for ' . INSTITUTION_NAME . '.', ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="author" content="<?php echo INSTITUTION_NAME; ?>">
 
     <title><?php echo isset($page_title) ? htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') . ' - ' : ''; ?><?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></title>

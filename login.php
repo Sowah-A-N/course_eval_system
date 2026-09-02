@@ -292,6 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sign in to <?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?> to submit and manage course evaluations.">
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Sign In &mdash; <?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
@@ -699,10 +700,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <!-- CSRF Token -->
                     <?php csrf_token_input(); ?>
 
-                    <!-- Username or Email -->
+                    <!-- Email or Username (students sign in with email; staff may use a username) -->
                     <div class="form-group">
                         <label class="form-label" for="username_email">
-                            Username or Email
+                            Email or Username
                             <span class="required-mark" aria-hidden="true">*</span>
                         </label>
                         <div class="input-wrapper">
