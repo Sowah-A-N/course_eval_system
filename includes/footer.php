@@ -106,19 +106,9 @@ $_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? 
     </div>
 </footer>
 
-<!-- JavaScript Files -->
-<script src="<?php echo $base_url; ?>/assets/js/main.js"></script>
-
-<?php if (isset($_SESSION['role_id']) && $_SESSION['role_id'] == ROLE_ADMIN): ?>
-    <script src="<?php echo $base_url; ?>/assets/js/admin.js"></script>
-<?php endif; ?>
-
-<!-- Additional JavaScript can be added by individual pages -->
-<?php if (isset($additional_js)): ?>
-    <?php foreach ($additional_js as $js_file): ?>
-        <script src="<?php echo $base_url . '/' . $js_file; ?>"></script>
-    <?php endforeach; ?>
-<?php endif; ?>
+<!-- Page behaviour is provided by the inline <script> blocks below. The former
+     assets/js/*.js files did not exist and were unused, so their (404-ing)
+     <script> tags have been removed. -->
 
 <!-- Inline JavaScript for page-specific functionality -->
 <?php if (isset($inline_js)): ?>

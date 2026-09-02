@@ -1,0 +1,17 @@
+# Course Evaluation System — web server configuration
+#
+# NOTE: ErrorDocument paths are document-root absolute and include the
+# application folder name (/course_evaluation). If the app is deployed under a
+# different path, update these three lines to match.
+
+# Branded error pages instead of the default (unbranded, version-leaking) Apache ones.
+ErrorDocument 403 /course_evaluation/error.php
+ErrorDocument 404 /course_evaluation/error.php
+ErrorDocument 500 /course_evaluation/error.php
+
+# Do not print the "Apache/2.4.x (Win64) PHP/8.x Server at ... Port 80" banner
+# on any server-generated page.
+ServerSignature Off
+
+# Disable directory listings (don't expose folder contents when no index exists).
+Options -Indexes

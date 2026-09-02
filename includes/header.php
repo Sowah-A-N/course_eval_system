@@ -158,29 +158,12 @@ foreach ($_modules as $_mod => $_len) {
 
     <title><?php echo isset($page_title) ? htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') . ' - ' : ''; ?><?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></title>
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="<?php echo $base_url; ?>/assets/images/favicon.ico">
+    <!-- Favicon (inline SVG data URI — self-contained, no external file) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzY2N2VlYSIvPjxwYXRoIGQ9Ik0xNiA3IDMgMTNsMTMgNiA5LTQuMTVWMjBoMnYtNy41eiIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik04IDE3djRjMCAxLjcgMy42IDMgOCAzczgtMS4zIDgtM3YtNGwtOCAzLjd6IiBmaWxsPSIjZmZmIi8+PC9zdmc+">
 
-    <!-- CSS Files -->
-    <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/main.css">
-
-    <?php if ($user_role == ROLE_ADMIN): ?>
-        <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/admin.css">
-    <?php elseif ($user_role == ROLE_HOD): ?>
-        <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/hod.css">
-    <?php elseif ($user_role == ROLE_STUDENT): ?>
-        <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/student.css">
-    <?php endif; ?>
-
-    <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/forms.css">
-    <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/tables.css">
-
-    <!-- Additional CSS can be added by individual pages -->
-    <?php if (isset($additional_css)): ?>
-        <?php foreach ($additional_css as $css_file): ?>
-            <link rel="stylesheet" href="<?php echo htmlspecialchars($base_url . '/' . $css_file, ENT_QUOTES, 'UTF-8'); ?>">
-        <?php endforeach; ?>
-    <?php endif; ?>
+    <!-- Styling comes from the global inline <style> block below plus each page's
+         own <style>. The former assets/css/*.css files did not exist and were
+         unused, so their (404-ing) <link> tags have been removed. -->
 
     <style>
         /* Global Styles */

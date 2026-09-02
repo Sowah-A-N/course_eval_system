@@ -486,7 +486,7 @@ require_once '../../includes/header.php';
     <h1>Assignment Matrix</h1>
     <p>Bulk assign lecturers to courses for your department.</p>
     <nav class="breadcrumb" aria-label="breadcrumb">
-        <a href="../dashboard.php">Dashboard</a> &rsaquo;
+        <a href="../index.php">Dashboard</a> &rsaquo;
         <a href="list.php">Lecturers</a> &rsaquo;
         <span>Assignment Matrix</span>
     </nav>
