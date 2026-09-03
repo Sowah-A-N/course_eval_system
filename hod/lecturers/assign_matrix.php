@@ -94,7 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
            JOIN courses c ON c.id = cl.course_id
           WHERE c.department_id = ?
             AND cl.academic_year_id = ?
-            AND cl.semester_id = ?');
+            AND cl.semester_id = ?
+            AND cl.is_active = 1');
     mysqli_stmt_bind_param($stmt_cur, 'iii', $department_id, $academic_year_id, $semester_id);
     mysqli_stmt_execute($stmt_cur);
     $res_cur = mysqli_stmt_get_result($stmt_cur);
@@ -114,8 +115,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
     $stmt_del = mysqli_prepare($conn,
         'DELETE FROM course_lecturers WHERE assignment_id = ?');
 
-    $inserts = 0;
-    $deletes = 0;
+    // If either statement failed to prepare, stop before we mislead the user with
+    // a "saved" message (MYSQLI_REPORT_OFF means failures are otherwise silent).
+    if ($stmt_ins === false || $stmt_del === false) {
+        $_SESSION['flash_message'] = 'Could not save assignments due to a database error. Please try again.';
+        $_SESSION['flash_type']    = 'error';
+        header('Location: assign_matrix.php');
+        exit();
+    }
+
+    $inserts  = 0;
+    $deletes  = 0;
+    $failures = 0;
 
     foreach ($dept_lecturer_ids as $lid => $_l) {
         foreach ($dept_course_ids as $cid => $_c) {
@@ -124,17 +135,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
             $existing_id = $exists ? $current[$lid][$cid] : null;
 
             if ($is_checked && !$exists) {
-                // INSERT
+                // INSERT — count only if it actually persisted.
                 mysqli_stmt_bind_param($stmt_ins, 'iiiii',
                     $cid, $lid, $academic_year_id, $semester_id, $hod_id);
-                mysqli_stmt_execute($stmt_ins);
-                $inserts++;
+                if (mysqli_stmt_execute($stmt_ins)) {
+                    $inserts++;
+                } else {
+                    $failures++;
+                }
 
             } elseif (!$is_checked && $exists) {
-                // DELETE
+                // DELETE — count only if it actually persisted.
                 mysqli_stmt_bind_param($stmt_del, 'i', $existing_id);
-                mysqli_stmt_execute($stmt_del);
-                $deletes++;
+                if (mysqli_stmt_execute($stmt_del)) {
+                    $deletes++;
+                } else {
+                    $failures++;
+                }
             }
         }
     }
@@ -154,8 +171,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$no_period) {
     ]);
 
     $_SESSION['flash_message'] = $inserts . ' assignment' . ($inserts !== 1 ? 's' : '') . ' added, '
-        . $deletes . ' removed.';
-    $_SESSION['flash_type'] = ($inserts > 0 || $deletes > 0) ? 'success' : 'info';
+        . $deletes . ' removed.'
+        . ($failures > 0 ? ' ' . $failures . ' change' . ($failures !== 1 ? 's' : '') . ' could not be saved.' : '');
+    if ($failures > 0) {
+        $_SESSION['flash_type'] = 'error';
+    } else {
+        $_SESSION['flash_type'] = ($inserts > 0 || $deletes > 0) ? 'success' : 'info';
+    }
 
     header('Location: assign_matrix.php');
     exit();
@@ -205,7 +227,8 @@ if (!$no_period) {
            JOIN courses c ON c.id = cl.course_id
           WHERE c.department_id = ?
             AND cl.academic_year_id = ?
-            AND cl.semester_id = ?');
+            AND cl.semester_id = ?
+            AND cl.is_active = 1');
     mysqli_stmt_bind_param($stmt_asgn, 'iii', $department_id, $academic_year_id, $semester_id);
     mysqli_stmt_execute($stmt_asgn);
     $res_asgn = mysqli_stmt_get_result($stmt_asgn);

@@ -148,20 +148,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 mysqli_stmt_close($stmt_check);
 
                 if (!$exists) {
-                    // Insert new assignment
+                    // Insert new assignment. assigned_by is NOT NULL and is_active
+                    // must be set explicitly so the row is visible to the many
+                    // queries that filter on is_active = 1 (and so the INSERT does
+                    // not fail on a strict-mode / production database).
                     $query_insert = "
                         INSERT INTO course_lecturers
-                        (course_id, lecturer_user_id, academic_year_id, semester_id, assigned_at)
-                        VALUES (?, ?, ?, ?, NOW())
+                        (course_id, lecturer_user_id, academic_year_id, semester_id, assigned_by, assigned_at, is_active)
+                        VALUES (?, ?, ?, ?, ?, NOW(), 1)
                     ";
                     $stmt_insert = mysqli_prepare($conn, $query_insert);
                     mysqli_stmt_bind_param(
                         $stmt_insert,
-                        "iiii",
+                        "iiiii",
                         $cid,
                         $selected_lecturer,
                         $active_period['academic_year_id'],
-                        $active_period['semester_id']
+                        $active_period['semester_id'],
+                        $hod_id
                     );
 
                     if (mysqli_stmt_execute($stmt_insert)) {
