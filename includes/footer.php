@@ -110,6 +110,40 @@ $_footer_dashboard_folder = $_footer_role_folders[$_SESSION['role_id'] ?? 0] ?? 
      assets/js/*.js files did not exist and were unused, so their (404-ing)
      <script> tags have been removed. -->
 
+<!-- Responsive tables: wrap any wide table that isn't already inside a
+     horizontally-scrollable container so it scrolls on small screens instead
+     of pushing the page sideways. App-wide, since this footer is on every page. -->
+<style>
+    .table-scroll-auto {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+    }
+</style>
+<script>
+    (function () {
+        'use strict';
+        function ancestorScrolls(el) {
+            var p = el.parentElement;
+            while (p && p !== document.body) {
+                var ox = window.getComputedStyle(p).overflowX;
+                if (ox === 'auto' || ox === 'scroll') return true;
+                p = p.parentElement;
+            }
+            return false;
+        }
+        document.querySelectorAll('table').forEach(function (table) {
+            // Skip tables already inside a horizontally-scrollable container.
+            if (table.closest('.table-scroll-auto')) return;
+            if (ancestorScrolls(table)) return;
+            var wrap = document.createElement('div');
+            wrap.className = 'table-scroll-auto';
+            table.parentNode.insertBefore(wrap, table);
+            wrap.appendChild(table);
+        });
+    }());
+</script>
+
 <!-- Inline JavaScript for page-specific functionality -->
 <?php if (isset($inline_js)): ?>
     <script>
