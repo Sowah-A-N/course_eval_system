@@ -75,6 +75,27 @@ The database also defines three read-only **views** used by reports:
 `view_active_period`, `view_course_evaluation_stats`, and
 `view_department_courses`. Their columns are not listed here.
 
+## Data-integrity notes
+
+Things to be aware of when inserting data or standing up a fresh database:
+
+- **`classes` requires `programme_id`, `level_id` and `year_of_completion`.**
+  All three are `NOT NULL` with no default, so every class row must supply a
+  valid programme, level, and completion year (in addition to `class_name` and
+  `department_id`). Inserting a class without them fails on a strict-mode
+  database.
+- **`course_lecturers` has no uniqueness constraint** beyond its primary key.
+  A lecturer *should* appear at most once per
+  `(course_id, academic_year_id, semester_id)`; this is currently enforced only
+  in application code, not by the database. A `UNIQUE (course_id,
+  lecturer_user_id, academic_year_id, semester_id)` index would make it robust.
+- **`course_lecturers.assigned_by` is `NOT NULL`** — every assignment must
+  record the user who made it.
+- **`evaluation_completions`** enforces "one evaluation per student per course
+  per period" via `UNIQUE (student_user_id, course_id, academic_year_id,
+  semester_id)`, with `course_id = 0` standing in for the once-per-semester
+  administrative evaluation.
+
 ---
 
 # Table reference
