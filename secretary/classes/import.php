@@ -28,8 +28,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'template') {
     header('Content-Disposition: attachment; filename="class_import_template.csv"');
     header('Pragma: no-cache');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['class_name', 'level_id']);
-    fputcsv($out, ['Year 1 Group A', '1']);
+    fputcsv($out, ['class_name', 'level_id', 'programme_id', 'year_of_completion']);
+    fputcsv($out, ['Year 1 Group A', '1', '1', (string)((int)date('Y') + 1)]);
     fclose($out);
     exit();
 }
@@ -41,6 +41,18 @@ function get_levels_map(mysqli $conn): array {
     $res = mysqli_query($conn, "SELECT t_id, level_name FROM level ORDER BY level_number");
     $map = [];
     while ($row = mysqli_fetch_assoc($res)) $map[(int)$row['t_id']] = $row['level_name'];
+    return $map;
+}
+
+// Programmes for the secretary's department, keyed by id.
+function get_programmes_map(mysqli $conn, int $dept_id): array {
+    $stmt = mysqli_prepare($conn, "SELECT t_id, prog_name FROM programme WHERE department_id=? ORDER BY prog_name");
+    mysqli_stmt_bind_param($stmt, "i", $dept_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $map = [];
+    while ($row = mysqli_fetch_assoc($res)) $map[(int)$row['t_id']] = $row['prog_name'];
+    mysqli_stmt_close($stmt);
     return $map;
 }
 
@@ -75,14 +87,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
     mysqli_begin_transaction($conn);
     try {
         $stmt_ins = mysqli_prepare($conn,
-            "INSERT INTO classes (class_name, class_code, department_id, level_id, created_at)
-             VALUES (?, ?, ?, ?, NOW())");
+            "INSERT INTO classes (class_name, class_code, department_id, programme_id, level_id, year_of_completion, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, NOW())");
 
         $class_code = ''; // classes.class_code is NOT NULL DEFAULT '' — no code used
         $inserted = 0;
         foreach ($preview as $row) {
-            mysqli_stmt_bind_param($stmt_ins, "ssii",
-                $row['class_name'], $class_code, $department_id, $row['level_id']);
+            mysqli_stmt_bind_param($stmt_ins, "ssiiii",
+                $row['class_name'], $class_code, $department_id, $row['programme_id'], $row['level_id'], $row['year_of_completion']);
             if (!mysqli_stmt_execute($stmt_ins)) {
                 throw new RuntimeException("DB insert failed for {$row['class_name']}: " . mysqli_stmt_error($stmt_ins));
             }
@@ -128,8 +140,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
 
     if (empty($parse_errors)) {
         $levels = get_levels_map($conn);
+        $programmes = get_programmes_map($conn, $department_id);
+        $current_year = (int) date('Y');
         $col = import_header_map($rows[0]);
-        $missing = array_diff(['class_name', 'level_id'], array_keys($col));
+        $missing = array_diff(['class_name', 'level_id', 'programme_id', 'year_of_completion'], array_keys($col));
         if (!empty($missing)) {
             $parse_errors[] = 'File is missing required columns: ' . implode(', ', $missing);
         } else {
@@ -140,6 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
 
                 $class_name   = import_cell($rows[$i], $col, 'class_name');
                 $level_id_raw = import_cell($rows[$i], $col, 'level_id');
+                $prog_id_raw  = import_cell($rows[$i], $col, 'programme_id');
+                $year_raw     = import_cell($rows[$i], $col, 'year_of_completion');
 
                 $row_errors = [];
                 if ($class_name === '') {
@@ -157,17 +173,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
                     $row_errors[] = "level_id $level_id does not exist";
                 }
 
+                $programme_id = filter_var($prog_id_raw, FILTER_VALIDATE_INT);
+                if ($programme_id === false || $programme_id <= 0) {
+                    $row_errors[] = 'programme_id must be a positive integer';
+                } elseif (!isset($programmes[$programme_id])) {
+                    $row_errors[] = "programme_id $programme_id is not in your department";
+                }
+
+                $year_of_completion = filter_var($year_raw, FILTER_VALIDATE_INT);
+                if ($year_of_completion === false || $year_of_completion < 2000 || $year_of_completion > $current_year + 10) {
+                    $row_errors[] = 'year_of_completion must be a valid year';
+                }
+
                 $is_valid = empty($row_errors);
                 if ($is_valid) { $valid_count++; $seen_names[strtolower($class_name)] = true; }
                 else $error_count++;
 
                 $preview_rows[] = [
-                    'row'        => $i + 1,
-                    'class_name' => $class_name,
-                    'level_id'   => $level_id !== false ? $level_id : 0,
-                    'level_name' => ($level_id && isset($levels[$level_id])) ? $levels[$level_id] : $level_id_raw,
-                    'valid'      => $is_valid,
-                    'errors'     => $row_errors,
+                    'row'                => $i + 1,
+                    'class_name'         => $class_name,
+                    'level_id'           => $level_id !== false ? $level_id : 0,
+                    'level_name'         => ($level_id && isset($levels[$level_id])) ? $levels[$level_id] : $level_id_raw,
+                    'programme_id'       => $programme_id !== false ? $programme_id : 0,
+                    'programme_name'     => ($programme_id && isset($programmes[$programme_id])) ? $programmes[$programme_id] : $prog_id_raw,
+                    'year_of_completion' => $year_of_completion !== false ? $year_of_completion : 0,
+                    'valid'              => $is_valid,
+                    'errors'             => $row_errors,
                 ];
             }
 
@@ -176,8 +207,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'confi
             } else {
                 $_SESSION['import_preview_classes'] = array_values(array_filter(
                     array_map(function($r) { return $r['valid'] ? [
-                        'class_name' => $r['class_name'],
-                        'level_id'   => $r['level_id'],
+                        'class_name'         => $r['class_name'],
+                        'level_id'           => $r['level_id'],
+                        'programme_id'       => $r['programme_id'],
+                        'year_of_completion' => $r['year_of_completion'],
                     ] : null; }, $preview_rows)
                 ));
             }
@@ -258,13 +291,15 @@ tr.row-error{border-left:3px solid #dc3545}
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Row</th><th>Class Name</th><th>Level</th><th>Status</th></tr></thead>
+            <thead><tr><th>Row</th><th>Class Name</th><th>Programme</th><th>Level</th><th>Year</th><th>Status</th></tr></thead>
             <tbody>
             <?php foreach ($preview_rows as $pr): ?>
             <tr class="<?php echo $pr['valid'] ? 'row-valid' : 'row-error'; ?>">
                 <td><?php echo (int)$pr['row']; ?></td>
                 <td><?php echo htmlspecialchars($pr['class_name']); ?></td>
+                <td><?php echo htmlspecialchars($pr['programme_name']); ?></td>
                 <td><?php echo htmlspecialchars($pr['level_name']); ?></td>
+                <td><?php echo htmlspecialchars((string)$pr['year_of_completion']); ?></td>
                 <td>
                     <?php if ($pr['valid']): ?>
                         <span class="badge-valid">Valid</span>
@@ -310,13 +345,15 @@ tr.row-error{border-left:3px solid #dc3545}
 
     <div class="template-hint">
         <strong>Required columns:</strong>
-        <code>class_name</code>, <code>level_id</code>
+        <code>class_name</code>, <code>level_id</code>, <code>programme_id</code>, <code>year_of_completion</code>
         <span style="color:#888">(any order — matched by column heading)</span>
         <br><br>
         <strong>Notes:</strong>
         <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
             <li><code>class_name</code> must be unique.</li>
             <li><code>level_id</code> must match a valid Level ID — see the reference table below.</li>
+            <li><code>programme_id</code> must be one of your department's programmes — see the reference below.</li>
+            <li><code>year_of_completion</code> is the 4-digit year the class is expected to graduate.</li>
         </ul>
         <br>
         <a href="import.php?action=template" class="btn btn-outline" style="background:#fff;border:2px solid #667eea;color:#667eea;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:500">
@@ -334,6 +371,21 @@ tr.row-error{border-left:3px solid #dc3545}
             $lvls = get_levels_map($conn);
             foreach ($lvls as $id => $name): ?>
             <tr><td><?php echo $id; ?></td><td><?php echo htmlspecialchars($name); ?></td></tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </details>
+
+    <!-- Programme reference (this department's programmes) -->
+    <details style="margin-bottom:18px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#667eea">View Programme ID Reference</summary>
+        <table style="margin-top:8px;width:auto;min-width:300px">
+            <thead><tr><th>Programme ID</th><th>Programme</th></tr></thead>
+            <tbody>
+            <?php
+            $progs_ref = get_programmes_map($conn, $department_id);
+            foreach ($progs_ref as $pid => $pname): ?>
+            <tr><td><?php echo (int)$pid; ?></td><td><?php echo htmlspecialchars($pname); ?></td></tr>
             <?php endforeach; ?>
             </tbody>
         </table>
