@@ -83,7 +83,15 @@ $query = "
         c.semester_id,
         l.level_name,
         s.semester_name,
-        (SELECT COUNT(*) FROM user_details ust WHERE ust.role_id = ".ROLE_STUDENT." AND ust.is_active = 1 AND ust.department_id = c.department_id AND ust.level_id = c.level_id) as total_evals,
+        (CASE
+            WHEN EXISTS (SELECT 1 FROM seminar_attendees sa WHERE sa.course_id = c.id)
+                THEN (SELECT COUNT(*) FROM seminar_attendees sa WHERE sa.course_id = c.id)
+            WHEN c.course_audience = 'institution'
+                THEN (SELECT COUNT(*) FROM user_details ust WHERE ust.role_id = ".ROLE_STUDENT." AND ust.is_active = 1)
+            WHEN c.course_audience = 'department'
+                THEN (SELECT COUNT(*) FROM user_details ust WHERE ust.role_id = ".ROLE_STUDENT." AND ust.is_active = 1 AND ust.department_id = c.department_id)
+            ELSE (SELECT COUNT(*) FROM user_details ust WHERE ust.role_id = ".ROLE_STUDENT." AND ust.is_active = 1 AND ust.department_id = c.department_id AND ust.level_id = c.level_id)
+        END) as total_evals,
         (SELECT COUNT(DISTINCT ev.evaluation_id) FROM evaluations ev WHERE ev.course_id = c.id AND ev.scope = 'course') as completed_evals,
         GROUP_CONCAT(DISTINCT CONCAT(u.f_name, ' ', u.l_name) SEPARATOR ', ') as lecturers
     FROM courses c
