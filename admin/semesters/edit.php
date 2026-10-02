@@ -21,7 +21,15 @@ if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid token.';
 $semester_name=trim($_POST['semester_name']??'');
 $is_active=isset($_POST['is_active'])?1:0;
+$eval_start_date=trim($_POST['eval_start_date']??'');
+$eval_end_date=trim($_POST['eval_end_date']??'');
 if(!in_array($semester_name,['First','Second']))$errors[]='Semester name must be First or Second.';
+foreach(['eval_start_date'=>$eval_start_date,'eval_end_date'=>$eval_end_date] as $k=>$v){
+if($v!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$v))$errors[]='Invalid date format for '.($k==='eval_start_date'?'evaluation start':'evaluation end').'.';
+}
+if($eval_start_date!==''&&$eval_end_date!==''&&$eval_end_date<$eval_start_date)$errors[]='Evaluation end date must be on or after the start date.';
+$eval_start_val=($eval_start_date==='')?null:$eval_start_date;
+$eval_end_val=($eval_end_date==='')?null:$eval_end_date;
 // A6: derive semester_value automatically — no separate field
 $semester_value=($semester_name==='First')?1:2;
 if(empty($errors)){
@@ -33,9 +41,9 @@ if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='That semester name
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="UPDATE semesters SET semester_name=?,semester_value=?,is_active=? WHERE semester_id=?";
+$query="UPDATE semesters SET semester_name=?,semester_value=?,is_active=?,eval_start_date=?,eval_end_date=? WHERE semester_id=?";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"siii",$semester_name,$semester_value,$is_active,$semester_id);
+mysqli_stmt_bind_param($stmt,"siissi",$semester_name,$semester_value,$is_active,$eval_start_val,$eval_end_val,$semester_id);
 if(mysqli_stmt_execute($stmt)){
 log_audit($conn,$_SESSION['user_id'],'SEMESTER_UPDATE','semesters',$semester_id,['semester_name'=>$semester['semester_name'],'semester_value'=>$semester['semester_value'],'is_active'=>$semester['is_active']],['semester_name'=>$semester_name,'semester_value'=>$semester_value,'is_active'=>$is_active]);
 
@@ -87,6 +95,14 @@ require_once '../../includes/header.php';
 <option value="Second" <?php echo $semester['semester_name']==='Second'?'selected':'';?>>Second (value: 2)</option>
 </select>
 <small style="color:#666">The numeric value (1 or 2) is derived automatically.</small>
+</div>
+<div class="form-group">
+<label class="form-label">Evaluation Window (optional)</label>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<input type="date" name="eval_start_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_start_date']??$semester['eval_start_date']??'');?>">
+<input type="date" name="eval_end_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_end_date']??$semester['eval_end_date']??'');?>">
+</div>
+<small style="color:#666">Students can submit course evaluations only between these dates. Leave blank for no date limit.</small>
 </div>
 <div class="form-group">
 <label><input type="checkbox" name="is_active" <?php echo $semester['is_active']?'checked':'';?>> Active</label>

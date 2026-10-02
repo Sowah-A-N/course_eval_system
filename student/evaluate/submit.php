@@ -94,6 +94,15 @@ if (!$period) {
     exit();
 }
 
+// 2.1 — evaluation window: block starting or submitting an evaluation when the
+// active period is configured with dates and today falls outside them.
+if (isset($period['eval_open']) && (int)$period['eval_open'] !== 1) {
+    $_SESSION['flash_message'] = 'Course evaluations are not open at this time.';
+    $_SESSION['flash_type'] = 'error';
+    header("Location: available_courses.php");
+    exit();
+}
+
 $dept_id  = (int)($stu['department_id'] ?? 0);
 $level_id = (int)($stu['level_id'] ?? 0);
 $class_id = (int)($stu['class_id'] ?? 0);

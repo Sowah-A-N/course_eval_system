@@ -324,7 +324,7 @@ define('INSTITUTION_WEBSITE', 'https://www.rmu.edu.gh');
 /**
  * Application Version
  */
-define('APP_VERSION', '2.0.0');
+define('APP_VERSION', '2.1.0');
 
 /**
  * Application URL  (no trailing slash)

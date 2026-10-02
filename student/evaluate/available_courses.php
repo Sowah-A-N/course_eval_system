@@ -63,6 +63,26 @@ if (!$active_period) {
     $active_semester = $active_period['semester_name'];
 }
 
+// 2.1 — evaluation window. eval_open comes from the view (1 when today is within
+// the configured window, or when no dates are set). Build a short status message.
+$eval_open  = !$active_period || (int)($active_period['eval_open'] ?? 1) === 1;
+$window_msg = '';
+if ($active_period) {
+    $es = $active_period['eval_start_date'] ?? null;
+    $ee = $active_period['eval_end_date'] ?? null;
+    if (!$eval_open) {
+        if ($es && strtotime($es) > time()) {
+            $window_msg = 'Course evaluations open on ' . date('M d, Y', strtotime($es)) . '.';
+        } elseif ($ee) {
+            $window_msg = 'Course evaluations closed on ' . date('M d, Y', strtotime($ee)) . '.';
+        } else {
+            $window_msg = 'Course evaluations are not open at this time.';
+        }
+    } elseif ($ee) {
+        $window_msg = 'Course evaluations are open until ' . date('M d, Y', strtotime($ee)) . '.';
+    }
+}
+
 // Resolve the student's enrolment — this drives which course evaluations they
 // may complete (courses in their department + level), replacing per-course tokens.
 $stmt_stu = mysqli_prepare($conn, "SELECT department_id, level_id, class_id FROM user_details WHERE user_id = ? LIMIT 1");
@@ -425,6 +445,15 @@ require_once '../../includes/header.php';
     <p>Select a course below to submit your evaluation</p>
 </div>
 
+<?php if ($window_msg): ?>
+    <div style="padding:12px 18px;border-radius:8px;margin-bottom:18px;font-size:14px;
+                background:<?php echo $eval_open ? '#d1ecf1' : '#fff3cd'; ?>;
+                border:1px solid <?php echo $eval_open ? '#bee5eb' : '#ffeeba'; ?>;
+                color:<?php echo $eval_open ? '#0c5460' : '#856404'; ?>;">
+        <?php echo $eval_open ? '🗓️ ' : '🔒 '; ?><?php echo htmlspecialchars($window_msg); ?>
+    </div>
+<?php endif; ?>
+
 <!-- Filters and Summary -->
 <div class="page-header-actions">
     <!-- Filter Tabs -->
@@ -501,11 +530,15 @@ require_once '../../includes/header.php';
                     <?php if ($admin_completed): ?>
                         <span class="btn btn-success">✓ Evaluation Complete</span>
                     <?php else: ?>
+                        <?php if ($eval_open): ?>
                         <form method="POST" action="submit.php" style="display:inline;margin:0">
                             <?php csrf_token_input(); ?>
                             <input type="hidden" name="scope" value="administrative">
                             <button type="submit" class="btn btn-primary">Evaluate Now →</button>
                         </form>
+                        <?php else: ?>
+                            <span class="btn btn-secondary" style="opacity:.6;cursor:not-allowed">Evaluations closed</span>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
@@ -584,6 +617,7 @@ require_once '../../includes/header.php';
                                 ✓ Evaluation Complete
                             </span>
                         <?php else: ?>
+                            <?php if ($eval_open): ?>
                             <form method="POST" action="submit.php" style="display:inline;margin:0">
                                 <?php csrf_token_input(); ?>
                                 <input type="hidden" name="scope" value="course">
@@ -592,6 +626,9 @@ require_once '../../includes/header.php';
                                     Evaluate Now →
                                 </button>
                             </form>
+                            <?php else: ?>
+                                <span class="btn btn-secondary" style="opacity:.6;cursor:not-allowed">Evaluations closed</span>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>

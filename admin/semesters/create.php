@@ -17,8 +17,17 @@ if(!validate_csrf_token())$errors[]='Invalid security token.';
 $academic_year_id=intval($_POST['academic_year_id']??0);
 $semester_name=trim($_POST['semester_name']??'');
 $is_active=isset($_POST['is_active'])?1:0;
+$eval_start_date=trim($_POST['eval_start_date']??'');
+$eval_end_date=trim($_POST['eval_end_date']??'');
 if($academic_year_id==0)$errors[]='Academic year required.';
 if(!in_array($semester_name,['First','Second']))$errors[]='Semester name must be First or Second.';
+// Evaluation window is optional; validate format and ordering when provided.
+foreach(['eval_start_date'=>$eval_start_date,'eval_end_date'=>$eval_end_date] as $k=>$v){
+if($v!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$v))$errors[]='Invalid date format for '.($k==='eval_start_date'?'evaluation start':'evaluation end').'.';
+}
+if($eval_start_date!==''&&$eval_end_date!==''&&$eval_end_date<$eval_start_date)$errors[]='Evaluation end date must be on or after the start date.';
+$eval_start_val=($eval_start_date==='')?null:$eval_start_date;
+$eval_end_val=($eval_end_date==='')?null:$eval_end_date;
 // A6: derive integer value from name — no separate field needed
 $semester_value=($semester_name==='First')?1:2;
 if(empty($errors)){
@@ -30,9 +39,9 @@ if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='That semester alre
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="INSERT INTO semesters (academic_year_id,semester_name,semester_value,is_active) VALUES (?,?,?,?)";
+$query="INSERT INTO semesters (academic_year_id,semester_name,semester_value,is_active,eval_start_date,eval_end_date) VALUES (?,?,?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"isii",$academic_year_id,$semester_name,$semester_value,$is_active);
+mysqli_stmt_bind_param($stmt,"isiiss",$academic_year_id,$semester_name,$semester_value,$is_active,$eval_start_val,$eval_end_val);
 if(mysqli_stmt_execute($stmt)){
 $new_semester_id=mysqli_insert_id($conn);
 log_audit($conn,$_SESSION['user_id'],'SEMESTER_CREATE','semesters',$new_semester_id,null,['academic_year_id'=>$academic_year_id,'semester_name'=>$semester_name,'semester_value'=>$semester_value]);
@@ -97,6 +106,14 @@ require_once '../../includes/header.php';
 <option value="Second" <?php echo(($_POST['semester_name']??'')==='Second')?'selected':'';?>>Second (value: 2)</option>
 </select>
 <small style="color:#666">The numeric ordering value is derived automatically.</small>
+</div>
+<div class="form-group">
+<label class="form-label">Evaluation Window (optional)</label>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<input type="date" name="eval_start_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_start_date']??'');?>" placeholder="Opens">
+<input type="date" name="eval_end_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_end_date']??'');?>" placeholder="Closes">
+</div>
+<small style="color:#666">Students can submit course evaluations only between these dates (e.g. the last two weeks of the semester). Leave blank for no date limit.</small>
 </div>
 <div class="form-group">
 <label>

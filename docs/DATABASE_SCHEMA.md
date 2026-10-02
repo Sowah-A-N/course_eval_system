@@ -234,7 +234,12 @@ Things to be aware of when inserting data or standing up a fresh database:
 | `semester_name` | enum('First','Second') | no |  |  |  |
 | `semester_value` | tinyint(1) | no |  |  |  |
 | `is_active` | tinyint(1) | no | MUL | 0 |  |
+| `eval_start_date` | date | yes |  |  | evaluation window opens (NULL = no limit) |
+| `eval_end_date` | date | yes |  |  | evaluation window closes (NULL = no limit) |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+> `view_active_period` exposes `eval_start_date`, `eval_end_date` and a computed
+> `eval_open` flag (1 when today is within the window, or when no dates are set).
 
 ## Evaluation
 
