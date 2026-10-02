@@ -94,14 +94,10 @@ if (!$period) {
     exit();
 }
 
-// 2.1 — evaluation window: block starting or submitting an evaluation when the
-// active period is configured with dates and today falls outside them.
-if (isset($period['eval_open']) && (int)$period['eval_open'] !== 1) {
-    $_SESSION['flash_message'] = 'Course evaluations are not open at this time.';
-    $_SESSION['flash_type'] = 'error';
-    header("Location: available_courses.php");
-    exit();
-}
+// 2.1/2.2 — evaluation window. The semester window (view eval_open) governs the
+// administrative evaluation and regular courses; short courses use their own
+// dates. The actual block happens per scope once the target is known (below).
+$semester_open = !isset($period['eval_open']) || (int)$period['eval_open'] === 1;
 
 $dept_id  = (int)($stu['department_id'] ?? 0);
 $level_id = (int)($stu['level_id'] ?? 0);
@@ -126,7 +122,8 @@ $token_data = [
 if ($scope === 'course') {
     // Eligibility: the course must be in the student's own department + level.
     $stmt_c = mysqli_prepare($conn,
-        "SELECT c.id AS course_id, c.course_code, c.name AS course_name, l.level_name, d.dep_name
+        "SELECT c.id AS course_id, c.course_code, c.name AS course_name, l.level_name, d.dep_name,
+                c.course_type, c.eval_start_date, c.eval_end_date
          FROM courses c
          LEFT JOIN level l ON c.level_id = l.t_id
          LEFT JOIN department d ON c.department_id = d.t_id
@@ -148,6 +145,22 @@ if ($scope === 'course') {
     $token_data['level_name']  = $course['level_name'];
     $token_data['dep_name']    = $course['dep_name'];
     $completion_course_id = (int)$course['course_id'];
+
+    // 2.2 — a short course uses its own window (last day → close date); a regular
+    // course follows the semester window.
+    if ($course['course_type'] === 'short' && $course['eval_start_date'] !== null && $course['eval_end_date'] !== null) {
+        $today = date('Y-m-d');
+        $course_open = ($today >= $course['eval_start_date'] && $today <= $course['eval_end_date']);
+    } else {
+        $course_open = $semester_open;
+    }
+    if (!$course_open) {
+        unset($_SESSION['pending_eval']);
+        $_SESSION['flash_message'] = 'Evaluations for this course are not open at this time.';
+        $_SESSION['flash_type'] = 'error';
+        header("Location: available_courses.php");
+        exit();
+    }
 } else {
     // Administrative evaluation — one per student per period. It carries the class
     // (→ advisor) and department so the advisor rating and per-department service
@@ -160,6 +173,15 @@ if ($scope === 'course') {
     $token_data['class_id']     = $class_id ?: null;
     $token_data['department_id'] = $dept_id ?: null;
     $completion_course_id = 0;
+
+    // Administrative evaluation follows the semester window.
+    if (!$semester_open) {
+        unset($_SESSION['pending_eval']);
+        $_SESSION['flash_message'] = 'Evaluations are not open at this time.';
+        $_SESSION['flash_type'] = 'error';
+        header("Location: available_courses.php");
+        exit();
+    }
 }
 
 // Block re-submission: reject if a completion already exists for this period.

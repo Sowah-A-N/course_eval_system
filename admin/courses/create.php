@@ -25,11 +25,21 @@ $name=trim($_POST['name']??'');
 $department_id=intval($_POST['department_id']??0);
 $level_id=intval($_POST['level_id']??0);
 $semester_id=intval($_POST['semester_id']??0);
+$course_type=(($_POST['course_type']??'regular')==='short')?'short':'regular';
+$eval_start_date=trim($_POST['eval_start_date']??'');
+$eval_end_date=trim($_POST['eval_end_date']??'');
 if(empty($course_code))$errors[]='Course code required.';
 if(empty($name))$errors[]='Course name required.';
 if($department_id==0)$errors[]='Please select a department.';
 if($level_id==0)$errors[]='Please select a level.';
 if($semester_id==0)$errors[]='Please select a semester.';
+// Short courses need an evaluation window (opens last day → closes); regular courses use the semester window.
+if($course_type==='short'){
+if($eval_start_date===''||$eval_end_date==='')$errors[]='Short courses require an evaluation open and close date.';
+foreach([$eval_start_date,$eval_end_date] as $d){if($d!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$d))$errors[]='Invalid evaluation date format.';}
+if($eval_start_date!==''&&$eval_end_date!==''&&$eval_end_date<$eval_start_date)$errors[]='Evaluation close date must be on or after the open date.';
+$eval_start_val=$eval_start_date;$eval_end_val=$eval_end_date;
+}else{$eval_start_val=null;$eval_end_val=null;}
 if(empty($errors)){
 $query_check="SELECT id FROM courses WHERE course_code=? AND department_id=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
@@ -39,9 +49,9 @@ if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Course code exists
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="INSERT INTO courses (course_code,name,department_id,level_id,semester_id) VALUES (?,?,?,?,?)";
+$query="INSERT INTO courses (course_code,name,department_id,level_id,semester_id,course_type,eval_start_date,eval_end_date) VALUES (?,?,?,?,?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"ssiii",$course_code,$name,$department_id,$level_id,$semester_id);
+mysqli_stmt_bind_param($stmt,"ssiiisss",$course_code,$name,$department_id,$level_id,$semester_id,$course_type,$eval_start_val,$eval_end_val);
 if(mysqli_stmt_execute($stmt)){
 $new_course_id=mysqli_insert_id($conn);
 log_audit($conn,$_SESSION['user_id'],'COURSE_CREATE','courses',$new_course_id,null,['course_code'=>$course_code,'name'=>$name,'department_id'=>$department_id]);
@@ -124,8 +134,30 @@ require_once '../../includes/header.php';
 <?php endforeach;?>
 </select>
 </div>
+<div class="form-group">
+<label class="form-label required">Course Type</label>
+<select name="course_type" id="course_type" class="form-select" required>
+<option value="regular" <?php echo(($_POST['course_type']??'regular')==='regular')?'selected':'';?>>Regular course (uses the semester window)</option>
+<option value="short" <?php echo(($_POST['course_type']??'')==='short')?'selected':'';?>>Short course / seminar (own evaluation window)</option>
+</select>
+</div>
+<div class="form-group" id="short_window" style="display:none">
+<label class="form-label">Evaluation Window (short courses)</label>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<input type="date" name="eval_start_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_start_date']??'');?>">
+<input type="date" name="eval_end_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_end_date']??'');?>">
+</div>
+<small style="color:#666">Opens on the last day of the course and stays open until the close date.</small>
+</div>
 <button type="submit" class="btn btn-primary">Create Course</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>
 </form>
 </div>
+<script>
+(function(){
+var sel=document.getElementById('course_type'),win=document.getElementById('short_window');
+function t(){win.style.display=sel.value==='short'?'block':'none';}
+sel.addEventListener('change',t);t();
+}());
+</script>
 <?php require_once '../../includes/footer.php';?>

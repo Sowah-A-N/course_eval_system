@@ -105,7 +105,7 @@ if ($active_period && $dept_id && $level_id) {
     // completed if a completion record already exists for the active period.
     $q = "
         SELECT c.id AS course_id, c.course_code, c.name AS course_name,
-               c.created_at,
+               c.created_at, c.course_type, c.eval_start_date AS c_eval_start, c.eval_end_date AS c_eval_end,
                l.level_name, d.dep_name,
                ec.completion_id, ec.completed_at
         FROM courses c
@@ -126,6 +126,23 @@ if ($active_period && $dept_id && $level_id) {
         $row['used_at']       = $row['completed_at'];
         $row['semester_name'] = $active_semester;
         $row['year_label']    = $active_year;
+        // 2.2 — per-course open state. Short courses with a window use their own
+        // dates; everything else follows the semester window ($eval_open).
+        $row['is_short'] = ($row['course_type'] === 'short');
+        $row['win_msg']  = '';
+        if ($row['is_short'] && $row['c_eval_start'] !== null && $row['c_eval_end'] !== null) {
+            $_today = date('Y-m-d');
+            $row['open'] = ($_today >= $row['c_eval_start'] && $_today <= $row['c_eval_end']);
+            if ($row['open']) {
+                $row['win_msg'] = 'Open until ' . date('M d, Y', strtotime($row['c_eval_end']));
+            } elseif ($_today < $row['c_eval_start']) {
+                $row['win_msg'] = 'Opens ' . date('M d, Y', strtotime($row['c_eval_start']));
+            } else {
+                $row['win_msg'] = 'Closed ' . date('M d, Y', strtotime($row['c_eval_end']));
+            }
+        } else {
+            $row['open'] = $eval_open;
+        }
         if ($row['is_used']) { $completed_count++; } else { $pending_count++; }
         if ($filter_status === 'pending'   && $row['is_used'])  continue;
         if ($filter_status === 'completed' && !$row['is_used']) continue;
@@ -570,6 +587,9 @@ require_once '../../includes/header.php';
                 <div class="course-header">
                     <div class="course-code"><?php echo htmlspecialchars($eval['course_code']); ?></div>
                     <div class="course-name"><?php echo htmlspecialchars($eval['course_name']); ?></div>
+                    <?php if ($eval['is_short']): ?>
+                        <div style="margin-top:6px;font-size:12px;color:#6b46c1;font-weight:600">📘 Short course<?php echo $eval['win_msg'] ? ' · ' . htmlspecialchars($eval['win_msg']) : ''; ?></div>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Course Meta Information -->
@@ -617,7 +637,7 @@ require_once '../../includes/header.php';
                                 ✓ Evaluation Complete
                             </span>
                         <?php else: ?>
-                            <?php if ($eval_open): ?>
+                            <?php if ($eval['open']): ?>
                             <form method="POST" action="submit.php" style="display:inline;margin:0">
                                 <?php csrf_token_input(); ?>
                                 <input type="hidden" name="scope" value="course">

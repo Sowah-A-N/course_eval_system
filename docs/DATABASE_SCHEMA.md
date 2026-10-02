@@ -185,6 +185,9 @@ Things to be aware of when inserting data or standing up a fresh database:
 | `level_id` | int | no | MUL |  |  |
 | `semester_id` | tinyint | no | MUL |  |  |
 | `credit_hours` | tinyint unsigned | no |  | 3 |  |
+| `course_type` | enum('regular','short') | no |  | regular | short = short course / seminar with its own eval window |
+| `eval_start_date` | date | yes |  |  | short course: evaluation opens (last day of course) |
+| `eval_end_date` | date | yes |  |  | short course: evaluation closes |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 ## Assignments
