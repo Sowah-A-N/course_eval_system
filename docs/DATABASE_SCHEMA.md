@@ -186,6 +186,7 @@ Things to be aware of when inserting data or standing up a fresh database:
 | `semester_id` | tinyint | no | MUL |  |  |
 | `credit_hours` | tinyint unsigned | no |  | 3 |  |
 | `course_type` | enum('regular','short') | no |  | regular | short = short course / seminar with its own eval window |
+| `course_audience` | enum('cohort','department','institution') | no |  | cohort | who may evaluate (short courses): cohort = dept+level, department, or institution-wide |
 | `eval_start_date` | date | yes |  |  | short course: evaluation opens (last day of course) |
 | `eval_end_date` | date | yes |  |  | short course: evaluation closes |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
@@ -213,6 +214,18 @@ Things to be aware of when inserting data or standing up a fresh database:
 | `level_id` | int | no | MUL |  |  |
 | `department_id` | int | no | MUL |  |  |
 | `advisor_id` | int | no | MUL |  |  |
+| `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+### `seminar_attendees`
+
+Optional explicit roster for a short course / seminar. When a course has rows
+here, only those students may evaluate it (overriding `courses.course_audience`).
+
+| Column | Type | Null | Key | Default | Notes |
+|---|---|---|---|---|---|
+| `id` | int | no | PRI |  | auto_increment |
+| `course_id` | int | no | MUL |  | part of UNIQUE(course_id, student_user_id) |
+| `student_user_id` | int | no | MUL |  |  |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 ## Academic calendar

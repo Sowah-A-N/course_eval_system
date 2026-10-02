@@ -24,6 +24,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/eligibility.php';
 
 // Start session and check login
 start_secure_session();
@@ -121,14 +122,16 @@ $token_data = [
 
 if ($scope === 'course') {
     // Eligibility: the course must be in the student's own department + level.
+    // Eligibility now covers seminars (audience scope or explicit roster), not
+    // just the student's own dept+level — see includes/eligibility.php.
     $stmt_c = mysqli_prepare($conn,
         "SELECT c.id AS course_id, c.course_code, c.name AS course_name, l.level_name, d.dep_name,
                 c.course_type, c.eval_start_date, c.eval_end_date
          FROM courses c
          LEFT JOIN level l ON c.level_id = l.t_id
          LEFT JOIN department d ON c.department_id = d.t_id
-         WHERE c.id = ? AND c.department_id = ? AND c.level_id = ? LIMIT 1");
-    mysqli_stmt_bind_param($stmt_c, "iii", $course_id, $dept_id, $level_id);
+         WHERE c.id = ? AND " . ces_course_eligibility_where('c') . " LIMIT 1");
+    mysqli_stmt_bind_param($stmt_c, "iiiii", $course_id, $student_id, $dept_id, $dept_id, $level_id);
     mysqli_stmt_execute($stmt_c);
     $course = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt_c));
     mysqli_stmt_close($stmt_c);

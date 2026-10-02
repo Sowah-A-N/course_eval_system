@@ -47,6 +47,7 @@ foreach([$eval_start_date,$eval_end_date] as $d){if($d!==''&&!preg_match('/^\d{4
 if($eval_start_date!==''&&$eval_end_date!==''&&$eval_end_date<$eval_start_date)$errors[]='Evaluation close date must be on or after the open date.';
 $eval_start_val=$eval_start_date;$eval_end_val=$eval_end_date;
 }else{$eval_start_val=null;$eval_end_val=null;}
+$course_audience=($course_type==='short'&&in_array($_POST['course_audience']??'',['cohort','department','institution'],true))?$_POST['course_audience']:'cohort';
 if(empty($errors)){
 $query_check="SELECT id FROM courses WHERE course_code=? AND department_id=? AND id!=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
@@ -56,9 +57,9 @@ if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Course code exists
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="UPDATE courses SET course_code=?,name=?,department_id=?,level_id=?,semester_id=?,course_type=?,eval_start_date=?,eval_end_date=? WHERE id=?";
+$query="UPDATE courses SET course_code=?,name=?,department_id=?,level_id=?,semester_id=?,course_type=?,course_audience=?,eval_start_date=?,eval_end_date=? WHERE id=?";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"ssiiisssi",$course_code,$name,$department_id,$level_id,$semester_id,$course_type,$eval_start_val,$eval_end_val,$course_id);
+mysqli_stmt_bind_param($stmt,"ssiiissssi",$course_code,$name,$department_id,$level_id,$semester_id,$course_type,$course_audience,$eval_start_val,$eval_end_val,$course_id);
 if(mysqli_stmt_execute($stmt)){
 log_audit($conn,$_SESSION['user_id'],'COURSE_UPDATE','courses',$course_id,['course_code'=>$course['course_code'],'name'=>$course['name']],['course_code'=>$course_code,'name'=>$name]);
 $_SESSION['flash_message']='Course updated!';
@@ -138,12 +139,20 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <div class="form-group" id="short_window" style="display:none">
-<label class="form-label">Evaluation Window (short courses)</label>
+<label class="form-label">Audience (short courses)</label>
+<select name="course_audience" class="form-select">
+<option value="cohort" <?php echo(($course['course_audience']??'cohort')==='cohort')?'selected':'';?>>Department + Level (one cohort)</option>
+<option value="department" <?php echo(($course['course_audience']??'')==='department')?'selected':'';?>>Whole Department (any level)</option>
+<option value="institution" <?php echo(($course['course_audience']??'')==='institution')?'selected':'';?>>Institution-wide (all students)</option>
+</select>
+<small style="color:#666">Who may evaluate this seminar. An exact attendee list (if set) takes priority over this.</small>
+<label class="form-label" style="margin-top:14px">Evaluation Window</label>
 <div style="display:flex;gap:12px;flex-wrap:wrap">
 <input type="date" name="eval_start_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($course['eval_start_date']??'');?>">
 <input type="date" name="eval_end_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($course['eval_end_date']??'');?>">
 </div>
 <small style="color:#666">Opens on the last day of the course and stays open until the close date.</small>
+<div style="margin-top:12px"><a href="attendees.php?course_id=<?php echo (int)$course_id;?>" class="btn btn-secondary" style="padding:8px 16px">Manage Attendee List →</a></div>
 </div>
 <button type="submit" class="btn btn-primary">Update Course</button>
 <a href="list.php" class="btn btn-secondary">Cancel</a>

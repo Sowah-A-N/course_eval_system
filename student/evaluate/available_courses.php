@@ -25,6 +25,7 @@ require_once '../../config/database.php';
 require_once '../../config/constants.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/eligibility.php';
 
 // Start session and check login
 start_secure_session();
@@ -114,11 +115,12 @@ if ($active_period && $dept_id && $level_id) {
         LEFT JOIN evaluation_completions ec
                ON ec.student_user_id = ? AND ec.course_id = c.id
               AND ec.academic_year_id = ? AND ec.semester_id = ?
-        WHERE c.department_id = ? AND c.level_id = ?
+        WHERE " . ces_course_eligibility_where('c') . "
         ORDER BY c.course_code
     ";
     $stmt = mysqli_prepare($conn, $q);
-    mysqli_stmt_bind_param($stmt, "iiiii", $student_id, $year_id, $sem_id, $dept_id, $level_id);
+    // Bind: completion join (student, year, sem), then eligibility (student, dept, dept, level).
+    mysqli_stmt_bind_param($stmt, "iiiiiii", $student_id, $year_id, $sem_id, $student_id, $dept_id, $dept_id, $level_id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     while ($row = mysqli_fetch_assoc($result)) {

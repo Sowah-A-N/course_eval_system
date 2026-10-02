@@ -36,6 +36,7 @@ foreach([$eval_start_date,$eval_end_date] as $d){if($d!==''&&!preg_match('/^\d{4
 if($eval_start_date!==''&&$eval_end_date!==''&&$eval_end_date<$eval_start_date)$errors[]='Evaluation close date must be on or after the open date.';
 $eval_start_val=$eval_start_date;$eval_end_val=$eval_end_date;
 }else{$eval_start_val=null;$eval_end_val=null;}
+$course_audience=($course_type==='short'&&in_array($_POST['course_audience']??'',['cohort','department','institution'],true))?$_POST['course_audience']:'cohort';
 if(empty($errors)){
 $query_check="SELECT id FROM courses WHERE course_code=? AND department_id=?";
 $stmt_check=mysqli_prepare($conn,$query_check);
@@ -45,9 +46,9 @@ if(mysqli_stmt_get_result($stmt_check)->num_rows>0)$errors[]='Course code exists
 mysqli_stmt_close($stmt_check);
 }
 if(empty($errors)){
-$query="INSERT INTO courses (course_code,name,credit_hours,level_id,semester_id,department_id,course_type,eval_start_date,eval_end_date) VALUES (?,?,?,?,?,?,?,?,?)";
+$query="INSERT INTO courses (course_code,name,credit_hours,level_id,semester_id,department_id,course_type,course_audience,eval_start_date,eval_end_date) VALUES (?,?,?,?,?,?,?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"ssiiiisss",$course_code,$name,$credit_hours,$level_id,$semester_id,$department_id,$course_type,$eval_start_val,$eval_end_val);
+mysqli_stmt_bind_param($stmt,"ssiiiissss",$course_code,$name,$credit_hours,$level_id,$semester_id,$department_id,$course_type,$course_audience,$eval_start_val,$eval_end_val);
 if(mysqli_stmt_execute($stmt)){
 $_SESSION['flash_message']='Course created successfully!';
 $_SESSION['flash_type']='success';
@@ -130,7 +131,14 @@ require_once '../../includes/header.php';
 </select>
 </div>
 <div class="form-group" id="short_window" style="display:none">
-<label class="form-label">Evaluation Window (short courses)</label>
+<label class="form-label">Audience (short courses)</label>
+<select name="course_audience" class="form-select">
+<option value="cohort" <?php echo(($_POST['course_audience']??'cohort')==='cohort')?'selected':'';?>>Department + Level (one cohort)</option>
+<option value="department" <?php echo(($_POST['course_audience']??'')==='department')?'selected':'';?>>Whole Department (any level)</option>
+<option value="institution" <?php echo(($_POST['course_audience']??'')==='institution')?'selected':'';?>>Institution-wide (all students)</option>
+</select>
+<small style="color:#666">Who may evaluate this seminar. You can also set an exact attendee list after saving.</small>
+<label class="form-label" style="margin-top:14px">Evaluation Window</label>
 <div style="display:flex;gap:12px;flex-wrap:wrap">
 <input type="date" name="eval_start_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_start_date']??'');?>">
 <input type="date" name="eval_end_date" class="form-input" style="flex:1;min-width:160px" value="<?php echo htmlspecialchars($_POST['eval_end_date']??'');?>">
