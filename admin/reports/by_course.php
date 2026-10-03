@@ -1,6 +1,7 @@
 <?php
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
+require_once '../../includes/eligibility.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
@@ -39,7 +40,7 @@ $eval_where="e.course_id=c.id AND e.scope='course'";
 $tok_params_main=[];$tok_types_main='';
 if($filter_year>0){$eval_where.=" AND e.academic_year_id=?";$tok_params_main[]=$filter_year;$tok_types_main.='i';}
 if($filter_sem>0){$eval_where.=" AND e.semester_id=?";$tok_params_main[]=$filter_sem;$tok_types_main.='i';}
-$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,(SELECT COUNT(*) FROM user_details u WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1 AND u.department_id=c.department_id AND u.level_id=c.level_id)as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluations e ON $eval_where WHERE c.id=? GROUP BY c.id";
+$query="SELECT c.course_code,c.name as course_name,d.dep_name,COUNT(DISTINCT e.evaluation_id)as response_count,".ces_course_denominator_sql('c')." as total_tokens FROM courses c LEFT JOIN department d ON c.department_id=d.t_id LEFT JOIN evaluations e ON $eval_where WHERE c.id=? GROUP BY c.id";
 $stmt=mysqli_prepare($conn,$query);
 $bp=[...$tok_params_main,$filter_course];$bt=$tok_types_main.'i';
 mysqli_stmt_bind_param($stmt,$bt,...$bp);

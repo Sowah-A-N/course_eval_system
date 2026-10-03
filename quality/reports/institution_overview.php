@@ -18,6 +18,7 @@
 // Include required files
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
+require_once '../../includes/eligibility.php';
 require_once '../../includes/session.php';
 require_once '../../includes/csrf.php';
 
@@ -90,12 +91,7 @@ if ($filter_semester > 0) {
 //   active_students  -> distinct students who completed a course evaluation
 $query_overall = "
     SELECT
-        (SELECT COUNT(*)
-           FROM courses c2
-           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
-                AND u.is_active = 1
-                AND u.department_id = c2.department_id
-                AND u.level_id = c2.level_id) as total_tokens,
+        (SELECT COALESCE(SUM(" . ces_course_denominator_sql('c2') . "),0) FROM courses c2) as total_tokens,
         (SELECT COUNT(DISTINCT ec.student_user_id)
            FROM evaluation_completions ec
           WHERE ec.scope = 'course' $ec_period) as active_students,
@@ -137,13 +133,7 @@ if ($sufficient_data) {
         SELECT
             l.level_name,
             l.level_number,
-            (SELECT COUNT(*)
-               FROM courses c2
-               JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
-                    AND u.is_active = 1
-                    AND u.department_id = c2.department_id
-                    AND u.level_id = c2.level_id
-              WHERE c2.level_id = l.t_id) as level_tokens,
+            (SELECT COALESCE(SUM(" . ces_course_denominator_sql('c2') . "),0) FROM courses c2 WHERE c2.level_id = l.t_id) as level_tokens,
             COUNT(DISTINCT e.evaluation_id) as level_completed
         FROM level l
         LEFT JOIN courses c ON c.level_id = l.t_id

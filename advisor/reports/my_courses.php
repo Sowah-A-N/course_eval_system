@@ -1,6 +1,7 @@
 <?php
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
+require_once '../../includes/eligibility.php';
 require_once '../../includes/session.php';
 start_secure_session();
 check_login();
@@ -42,9 +43,7 @@ $courses = [];
 if($sel_year && $sel_sem){
     $stmt_c=mysqli_prepare($conn,
         "SELECT c.id,c.course_code,c.name,
-                (SELECT COUNT(*) FROM user_details u
-                   WHERE u.role_id=".ROLE_STUDENT." AND u.is_active=1
-                     AND u.department_id=c.department_id AND u.level_id=c.level_id) AS total_tokens,
+                ".ces_course_denominator_sql('c')." AS total_tokens,
                 (SELECT COUNT(DISTINCT ec.student_user_id) FROM evaluation_completions ec
                    WHERE ec.course_id=c.id AND ec.academic_year_id=? AND ec.semester_id=?) AS used_tokens,
                 AVG(CAST(r.response_value AS DECIMAL(10,2))) AS avg_rating,

@@ -10,6 +10,7 @@
 
 require_once '../../config/database.php';
 require_once '../../config/constants.php';
+require_once '../../includes/eligibility.php';
 require_once '../../includes/session.php';
 
 start_secure_session();
@@ -40,12 +41,7 @@ $query = "
         s.semester_value,
         ay.start_year,
         COUNT(DISTINCT e.evaluation_id) as completed,
-        (SELECT COUNT(*)
-           FROM courses c2
-           JOIN user_details u ON u.role_id = " . ROLE_STUDENT . "
-                AND u.is_active = 1
-                AND u.department_id = c2.department_id
-                AND u.level_id = c2.level_id) as total,
+        (SELECT COALESCE(SUM(" . ces_course_denominator_sql('c2') . "),0) FROM courses c2) as total,
         AVG(CAST(r.response_value AS DECIMAL(10,2))) as avg_rating
     FROM evaluations e
     JOIN academic_year ay ON e.academic_year_id = ay.academic_year_id

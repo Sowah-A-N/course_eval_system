@@ -52,6 +52,43 @@ if (!function_exists('ces_course_eligibility_where')) {
     }
 
     /**
+     * SQL scalar expression for the number of active students eligible for a course
+     * (the response-rate denominator), audience- and roster-aware. $c is the courses
+     * table alias in the surrounding query. Safe to use inside SUM(...) over courses.
+     */
+    function ces_course_denominator_sql($c = 'c')
+    {
+        $r = (int) ROLE_STUDENT;
+        return "(CASE
+            WHEN EXISTS (SELECT 1 FROM seminar_attendees sa WHERE sa.course_id = {$c}.id)
+                THEN (SELECT COUNT(*) FROM seminar_attendees sa WHERE sa.course_id = {$c}.id)
+            WHEN {$c}.course_audience = 'institution'
+                THEN (SELECT COUNT(*) FROM user_details u WHERE u.role_id = {$r} AND u.is_active = 1)
+            WHEN {$c}.course_audience = 'department'
+                THEN (SELECT COUNT(*) FROM user_details u WHERE u.role_id = {$r} AND u.is_active = 1 AND u.department_id = {$c}.department_id)
+            ELSE (SELECT COUNT(*) FROM user_details u WHERE u.role_id = {$r} AND u.is_active = 1 AND u.department_id = {$c}.department_id AND u.level_id = {$c}.level_id)
+        END)";
+    }
+
+    /**
+     * SQL scalar subquery for how many courses a student is eligible to evaluate,
+     * audience- and roster-aware. $u is the user_details alias in the surrounding query.
+     */
+    function ces_student_denominator_sql($u = 'u')
+    {
+        return "(SELECT COUNT(*) FROM courses c WHERE
+            EXISTS (SELECT 1 FROM seminar_attendees sa WHERE sa.course_id = c.id AND sa.student_user_id = {$u}.user_id)
+            OR (
+                NOT EXISTS (SELECT 1 FROM seminar_attendees sa2 WHERE sa2.course_id = c.id)
+                AND (
+                    c.course_audience = 'institution'
+                    OR (c.course_audience = 'department' AND c.department_id = {$u}.department_id)
+                    OR (c.course_audience = 'cohort' AND c.department_id = {$u}.department_id AND c.level_id = {$u}.level_id)
+                )
+            ))";
+    }
+
+    /**
      * Count of active students eligible for a course — the response-rate denominator.
      * Roster present -> roster size; otherwise the audience scope's population.
      */
