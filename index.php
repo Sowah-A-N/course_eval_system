@@ -120,6 +120,18 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role_id'])) {
             header("Location: quality/index.php");
             exit();
 
+        case ROLE_DEAN:
+            header("Location: dean/index.php");
+            exit();
+
+        case ROLE_PROVOST:
+            header("Location: provost/index.php");
+            exit();
+
+        case ROLE_VC:
+            header("Location: vc/index.php");
+            exit();
+
         default:
             // Unknown role - logout and redirect to login
             session_destroy();

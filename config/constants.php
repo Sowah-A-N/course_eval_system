@@ -53,6 +53,9 @@ define('ROLE_SECRETARY', 3);    // Department Secretary - read-only access
 define('ROLE_ADVISOR', 4);      // Class Advisor - class-level access
 define('ROLE_STUDENT', 5);      // Student - evaluation submission
 define('ROLE_QUALITY', 6);      // Quality Assurance - institution-wide reporting
+define('ROLE_DEAN', 7);         // Dean - faculty-wide reporting (oversees its departments)
+define('ROLE_PROVOST', 8);      // Provost - institution-wide reporting
+define('ROLE_VC', 9);           // Vice-Chancellor - institution-wide reporting
 // Lecturers share ROLE_ADVISOR (4) — a lecturer is an advisor not yet assigned a class.
 // This alias exists so that existing code using ROLE_LECTURER continues to work without
 // needing a separate role integer in the database.
@@ -79,6 +82,9 @@ define('ROLE_NAMES', [
     ROLE_ADVISOR => 'Lecturer',
     ROLE_STUDENT => 'Student',
     ROLE_QUALITY => 'Quality Assurance',
+    ROLE_DEAN => 'Dean',
+    ROLE_PROVOST => 'Provost',
+    ROLE_VC => 'Vice-Chancellor',
 ]);
 
 // ============================================

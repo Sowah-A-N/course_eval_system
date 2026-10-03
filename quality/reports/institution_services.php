@@ -32,7 +32,7 @@ if (!defined('ROLE_QUALITY')) {
     define('ROLE_QUALITY', 6);
 }
 
-if ($_SESSION['role_id'] !== ROLE_ADMIN && $_SESSION['role_id'] !== ROLE_QUALITY) {
+if (!in_array($_SESSION['role_id'], [ROLE_ADMIN, ROLE_QUALITY, ROLE_PROVOST, ROLE_VC], true)) {
     $_SESSION['flash_message'] = 'Access denied.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");

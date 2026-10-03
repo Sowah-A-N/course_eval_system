@@ -36,6 +36,9 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role_id'])) {
         case ROLE_ADVISOR:   header("Location: $base_url/advisor/index.php");   exit();
         case ROLE_STUDENT:   header("Location: $base_url/student/index.php");   exit();
         case ROLE_QUALITY:   header("Location: $base_url/quality/index.php");   exit();
+        case ROLE_DEAN:      header("Location: $base_url/dean/index.php");      exit();
+        case ROLE_PROVOST:   header("Location: $base_url/provost/index.php");   exit();
+        case ROLE_VC:        header("Location: $base_url/vc/index.php");        exit();
         default:             session_destroy(); break;
     }
 }
@@ -243,6 +246,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     case ROLE_ADVISOR:   header("Location: $base_url/advisor/index.php");   exit();
                                     case ROLE_STUDENT:   header("Location: $base_url/student/index.php");   exit();
                                     case ROLE_QUALITY:   header("Location: $base_url/quality/index.php");   exit();
+                                    case ROLE_DEAN:      header("Location: $base_url/dean/index.php");      exit();
+                                    case ROLE_PROVOST:   header("Location: $base_url/provost/index.php");   exit();
+                                    case ROLE_VC:        header("Location: $base_url/vc/index.php");        exit();
                                     default:             $error = "Invalid user role. Please contact administrator.";
                                 }
 

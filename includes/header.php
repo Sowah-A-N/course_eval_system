@@ -496,6 +496,7 @@ foreach ($_modules as $_mod => $_len) {
                 <li class="dropdown">
                     <a href="#">Academics ▾</a>
                     <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/admin/faculties/index.php">Faculties</a>
                         <a href="<?php echo $base_url; ?>/admin/departments/list.php">Departments</a>
                         <a href="<?php echo $base_url; ?>/admin/courses/list.php">Courses</a>
                         <a href="<?php echo $base_url; ?>/admin/classes/list.php">Classes</a>
@@ -652,6 +653,22 @@ foreach ($_modules as $_mod => $_len) {
                         <a href="<?php echo $base_url; ?>/secretary/reports/department_overview.php">Department Overview</a>
                         <a href="<?php echo $base_url; ?>/secretary/reports/evaluation_summary.php">Evaluation Summary</a>
                         <a href="<?php echo $base_url; ?>/secretary/exports/index.php">Export Data</a>
+                    </div>
+                </li>
+
+            <?php elseif ($user_role == ROLE_DEAN): ?>
+                <!-- Dean Menu -->
+                <li><a href="<?php echo $base_url; ?>/dean/index.php">My Faculty</a></li>
+
+            <?php elseif ($user_role == ROLE_PROVOST || $user_role == ROLE_VC): ?>
+                <!-- Provost / Vice-Chancellor Menu -->
+                <li class="dropdown">
+                    <a href="#">Reports ▾</a>
+                    <div class="dropdown-menu">
+                        <a href="<?php echo $base_url; ?>/quality/reports/institution_overview.php">Institution Overview</a>
+                        <a href="<?php echo $base_url; ?>/quality/reports/department_comparison.php">Department Comparison</a>
+                        <a href="<?php echo $base_url; ?>/quality/reports/institution_services.php">Institutional Services</a>
+                        <a href="<?php echo $base_url; ?>/quality/reports/trend_analysis.php">Trend Analysis</a>
                     </div>
                 </li>
             <?php endif; ?>

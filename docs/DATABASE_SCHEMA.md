@@ -139,6 +139,7 @@ Things to be aware of when inserting data or standing up a fresh database:
 | `hod_id` | int | no | MUL | 0 |  |
 | `dep_name` | varchar(100) | no |  |  |  |
 | `dep_code` | varchar(50) | no | UNI |  |  |
+| `faculty_id` | int | yes | MUL |  | which faculty the department belongs to (NULL = unassigned) |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 ### `programme`
@@ -190,6 +191,22 @@ Things to be aware of when inserting data or standing up a fresh database:
 | `eval_start_date` | date | yes |  |  | short course: evaluation opens (last day of course) |
 | `eval_end_date` | date | yes |  |  | short course: evaluation closes |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+### `faculties`
+
+A faculty groups departments and is headed by a Dean. Provost and
+Vice-Chancellor are institution-wide and not tied to a faculty.
+
+| Column | Type | Null | Key | Default | Notes |
+|---|---|---|---|---|---|
+| `t_id` | int | no | PRI |  | auto_increment |
+| `faculty_name` | varchar(100) | no | UNI |  |  |
+| `faculty_code` | varchar(20) | no | UNI |  |  |
+| `dean_user_id` | int | yes | MUL |  | the Dean (user_details) heading this faculty |
+| `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+Roles (the `roles` table): 1 admin, 2 hod, 3 secretary, 4 advisor/lecturer,
+5 student, 6 quality, **7 dean, 8 provost, 9 vice_chancellor**.
 
 ## Assignments
 

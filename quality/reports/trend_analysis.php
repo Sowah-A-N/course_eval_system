@@ -19,7 +19,7 @@ check_login();
 // ROLE_QUALITY is defined in constants.php (already loaded above)
 // Bug was: !== ROLE_ADMIN || !== ROLE_QUALITY is always true (blocks everyone).
 // Fix: use && so only non-admin AND non-quality users are redirected.
-if ($_SESSION['role_id'] !== ROLE_ADMIN && $_SESSION['role_id'] !== ROLE_QUALITY) {
+if (!in_array($_SESSION['role_id'], [ROLE_ADMIN, ROLE_QUALITY, ROLE_PROVOST, ROLE_VC], true)) {
     $_SESSION['flash_message'] = 'Access denied. You do not have permission to view this page.';
     $_SESSION['flash_type'] = 'error';
     header("Location: ../../login.php");
