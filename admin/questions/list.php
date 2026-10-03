@@ -110,6 +110,8 @@ require_once '../../includes/header.php';
 <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;<?php echo $q_scope==='administrative'?'background:#ede9fe;color:#5b21b6':'background:#e0f2fe;color:#075985';?>">
 <?php echo $q_scope==='administrative'?'Once per semester':'Per course';?>
 </span>
+<?php $q_owner=($question['department_id']!==null)?'Department':(($question['course_id']!==null)?'Course':'Global'); ?>
+<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;<?php echo $q_owner==='Global'?'background:#f1f5f9;color:#475569':'background:#fef9c3;color:#854d0e';?>" title="Department/Course questions are managed by HODs and lecturers"><?php echo $q_owner;?></span>
 <span style="font-size:12px;color:#999">ID: <?php echo $question['question_id'];?></span>
 </div>
 <div class="question-actions">

@@ -126,6 +126,7 @@ if ($scope === 'course') {
     // just the student's own dept+level — see includes/eligibility.php.
     $stmt_c = mysqli_prepare($conn,
         "SELECT c.id AS course_id, c.course_code, c.name AS course_name, l.level_name, d.dep_name,
+                c.department_id AS course_dept_id,
                 c.course_type, c.eval_start_date, c.eval_end_date
          FROM courses c
          LEFT JOIN level l ON c.level_id = l.t_id
@@ -148,6 +149,8 @@ if ($scope === 'course') {
     $token_data['level_name']  = $course['level_name'];
     $token_data['dep_name']    = $course['dep_name'];
     $completion_course_id = (int)$course['course_id'];
+    $course_dept_id = (int)$course['course_dept_id'];
+    $course_pk      = (int)$course['course_id'];
 
     // 2.2 — a short course uses its own window (last day → close date); a regular
     // course follows the semester window.
@@ -202,13 +205,30 @@ if ($already_done) {
     exit();
 }
 
-// Get all active evaluation questions grouped by category
-$stmt_q = mysqli_prepare($conn,
-    "SELECT question_id, question_text, category, display_order
-     FROM evaluation_questions
-     WHERE is_active = 1 AND scope = ?
-     ORDER BY category, display_order");
-mysqli_stmt_bind_param($stmt_q, "s", $scope);
+// Get active evaluation questions grouped by category. For a course evaluation
+// this is the standard (global) course questions PLUS the course's department
+// questions PLUS questions written for that specific course (feature 2.3).
+// Administrative questions stay global.
+if ($scope === 'course') {
+    $stmt_q = mysqli_prepare($conn,
+        "SELECT question_id, question_text, category, display_order
+         FROM evaluation_questions
+         WHERE is_active = 1 AND scope = 'course'
+           AND (
+               (department_id IS NULL AND course_id IS NULL)
+               OR (department_id = ? AND course_id IS NULL)
+               OR (course_id = ?)
+           )
+         ORDER BY category, display_order");
+    mysqli_stmt_bind_param($stmt_q, "ii", $course_dept_id, $course_pk);
+} else {
+    $stmt_q = mysqli_prepare($conn,
+        "SELECT question_id, question_text, category, display_order
+         FROM evaluation_questions
+         WHERE is_active = 1 AND scope = 'administrative'
+           AND department_id IS NULL AND course_id IS NULL
+         ORDER BY category, display_order");
+}
 mysqli_stmt_execute($stmt_q);
 $result_questions = mysqli_stmt_get_result($stmt_q);
 $questions = [];

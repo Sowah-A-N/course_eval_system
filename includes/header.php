@@ -548,6 +548,9 @@ foreach ($_modules as $_mod => $_len) {
                 <li>
                     <a href="<?php echo $base_url; ?>/hod/courses/list.php">Courses</a>
                 </li>
+                <li>
+                    <a href="<?php echo $base_url; ?>/hod/questions/index.php">Questions</a>
+                </li>
                 <li class="dropdown">
                     <a href="#">Reports ▾</a>
                     <div class="dropdown-menu">
@@ -598,6 +601,9 @@ foreach ($_modules as $_mod => $_len) {
                 <!-- Advisor Menu -->
                 <li>
                     <a href="<?php echo $base_url; ?>/advisor/students/list.php">My Students</a>
+                </li>
+                <li>
+                    <a href="<?php echo $base_url; ?>/advisor/questions/index.php">My Questions</a>
                 </li>
                 <li class="dropdown">
                     <a href="#">Reports ▾</a>

@@ -268,6 +268,9 @@ here, only those students may evaluate it (overriding `courses.course_audience`)
 | `is_required` | tinyint(1) | yes |  | 1 |  |
 | `category` | varchar(50) | yes | MUL | General |  |
 | `scope` | enum('course','administrative') | no |  | course |  |
+| `department_id` | int | yes | MUL |  | set = department question; with course_id NULL |
+| `course_id` | int | yes | MUL |  | set = question for one specific course |
+| `created_by` | int | yes |  |  | author (HOD/lecturer); NULL for the standard set |
 | `display_order` | int | yes | MUL | 0 |  |
 | `is_active` | tinyint(1) | yes | MUL | 1 |  |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
