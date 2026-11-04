@@ -112,6 +112,9 @@ require_once '../../includes/header.php';
 </span>
 <?php $q_owner=($question['department_id']!==null)?'Department':(($question['course_id']!==null)?'Course':'Global'); ?>
 <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;<?php echo $q_owner==='Global'?'background:#f1f5f9;color:#475569':'background:#fef9c3;color:#854d0e';?>" title="Department/Course questions are managed by HODs and lecturers"><?php echo $q_owner;?></span>
+<?php $q_type=$question['answer_type']??'rating'; if($q_type!=='rating'): ?>
+<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#dcfce7;color:#166534"><?php echo htmlspecialchars(ANSWER_TYPES[$q_type]??$q_type);?></span>
+<?php endif; ?>
 <span style="font-size:12px;color:#999">ID: <?php echo $question['question_id'];?></span>
 </div>
 <div class="question-actions">

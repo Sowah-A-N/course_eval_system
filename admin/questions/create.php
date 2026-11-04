@@ -19,12 +19,13 @@ $question_text=trim($_POST['question_text']??'');
 $question_order=intval($_POST['question_order']??$next_order);
 $is_active=isset($_POST['is_active'])?1:0;
 $scope=(($_POST['scope']??'course')==='administrative')?'administrative':'course';
+$answer_type=array_key_exists($_POST['answer_type']??'',ANSWER_TYPES)?$_POST['answer_type']:'rating';
 if(empty($question_text))$errors[]='Question text required.';
 if($question_order<=0)$errors[]='Question order must be positive.';
 if(empty($errors)){
-$query="INSERT INTO evaluation_questions (question_text,display_order,is_active,scope) VALUES (?,?,?,?)";
+$query="INSERT INTO evaluation_questions (question_text,display_order,is_active,scope,answer_type) VALUES (?,?,?,?,?)";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"siis",$question_text,$question_order,$is_active,$scope);
+mysqli_stmt_bind_param($stmt,"siiss",$question_text,$question_order,$is_active,$scope,$answer_type);
 if(mysqli_stmt_execute($stmt)){
 $new_question_id=mysqli_insert_id($conn);
 log_audit($conn,$_SESSION['user_id'],'QUESTION_CREATE','evaluation_questions',$new_question_id,null,['question_text'=>$question_text,'display_order'=>$question_order]);
@@ -94,6 +95,15 @@ require_once '../../includes/header.php';
 <option value="administrative" <?php echo(($_POST['scope']??'')==='administrative')?'selected':'';?>>Once per semester — administrative / services</option>
 </select>
 <small style="color:#666">Administrative questions (Registry, Library, class advisor, etc.) are answered only once each semester, not for every course.</small>
+</div>
+<div class="form-group">
+<label class="form-label required">Answer Type</label>
+<select name="answer_type" class="form-input">
+<?php foreach(ANSWER_TYPES as $atk=>$atl): ?>
+<option value="<?php echo $atk;?>" <?php echo(($_POST['answer_type']??'rating')===$atk)?'selected':'';?>><?php echo htmlspecialchars($atl);?></option>
+<?php endforeach;?>
+</select>
+<small style="color:#666">Only ratings count towards report averages. Written answers are always optional for students.</small>
 </div>
 <div class="form-group">
 <label for="is_active">

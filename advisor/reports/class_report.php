@@ -212,7 +212,7 @@ if (empty($level_ids)) {
             LEFT JOIN responses r ON eq.question_id = r.question_id
             LEFT JOIN evaluations e ON r.evaluation_id = e.evaluation_id
             LEFT JOIN courses c ON e.course_id = c.id
-            WHERE eq.is_active = 1 AND eq.scope = 'course'
+            WHERE eq.is_active = 1 AND eq.scope = 'course' AND eq.answer_type = 'rating'
             AND ($where_clause OR r.id IS NULL)
             GROUP BY eq.question_id
             ORDER BY eq.category, eq.display_order

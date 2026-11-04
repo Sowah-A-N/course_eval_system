@@ -17,18 +17,28 @@ mysqli_stmt_execute($stmt);
 $question=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if(!$question){$_SESSION['flash_message']='Question not found.';header("Location:list.php");exit();}
+// Once students have answered a question its answer type is locked — changing it
+// would strand the existing answers in the wrong place.
+$stmt_used=mysqli_prepare($conn,"SELECT (SELECT COUNT(*) FROM responses WHERE question_id=?)+(SELECT COUNT(*) FROM response_answers WHERE question_id=?)");
+mysqli_stmt_bind_param($stmt_used,"ii",$question_id,$question_id);
+mysqli_stmt_execute($stmt_used);
+$answer_count=(int)mysqli_fetch_row(mysqli_stmt_get_result($stmt_used))[0];
+mysqli_stmt_close($stmt_used);
+$type_locked=$answer_count>0;
+$cur_type=$question['answer_type']??'rating';
 if($_SERVER['REQUEST_METHOD']=='POST'){
 if(!validate_csrf_token())$errors[]='Invalid token.';
 $question_text=trim($_POST['question_text']??'');
 $question_order=intval($_POST['question_order']??1);
 $is_active=isset($_POST['is_active'])?1:0;
 $scope=(($_POST['scope']??'course')==='administrative')?'administrative':'course';
+$answer_type=$type_locked?$cur_type:(array_key_exists($_POST['answer_type']??'',ANSWER_TYPES)?$_POST['answer_type']:$cur_type);
 if(empty($question_text))$errors[]='Question text required.';
 if($question_order<=0)$errors[]='Question order must be positive.';
 if(empty($errors)){
-$query="UPDATE evaluation_questions SET question_text=?,display_order=?,is_active=?,scope=? WHERE question_id=?";
+$query="UPDATE evaluation_questions SET question_text=?,display_order=?,is_active=?,scope=?,answer_type=? WHERE question_id=?";
 $stmt=mysqli_prepare($conn,$query);
-mysqli_stmt_bind_param($stmt,"siisi",$question_text,$question_order,$is_active,$scope,$question_id);
+mysqli_stmt_bind_param($stmt,"siissi",$question_text,$question_order,$is_active,$scope,$answer_type,$question_id);
 if(mysqli_stmt_execute($stmt)){
 log_audit($conn,$_SESSION['user_id'],'QUESTION_UPDATE','evaluation_questions',$question_id,['question_text'=>$question['question_text'],'display_order'=>$question['display_order']],['question_text'=>$question_text,'display_order'=>$question_order]);
 $_SESSION['flash_message']='Question updated!';
@@ -80,6 +90,17 @@ require_once '../../includes/header.php';
 <option value="administrative" <?php echo($cur_scope==='administrative')?'selected':'';?>>Once per semester — administrative / services</option>
 </select>
 <small style="color:#666">Administrative questions are answered only once each semester, not for every course.</small>
+</div>
+<div class="form-group">
+<label class="form-label required">Answer Type</label>
+<select name="answer_type" class="form-input" <?php echo $type_locked?'disabled':'';?>>
+<?php foreach(ANSWER_TYPES as $atk=>$atl): ?>
+<option value="<?php echo $atk;?>" <?php echo($cur_type===$atk)?'selected':'';?>><?php echo htmlspecialchars($atl);?></option>
+<?php endforeach;?>
+</select>
+<small style="color:#666"><?php echo $type_locked
+    ? 'Locked: this question already has '.$answer_count.' answer(s). To ask it a different way, create a new question and deactivate this one.'
+    : 'Only ratings count towards report averages. Written answers are always optional for students.';?></small>
 </div>
 <div class="form-group">
 <label for="is_active">

@@ -285,6 +285,7 @@ here, only those students may evaluate it (overriding `courses.course_audience`)
 | `is_required` | tinyint(1) | yes |  | 1 |  |
 | `category` | varchar(50) | yes | MUL | General |  |
 | `scope` | enum('course','administrative') | no |  | course |  |
+| `answer_type` | enum('rating','number','yes_no','text') | no |  | rating | how it is answered; only ratings feed averages |
 | `department_id` | int | yes | MUL |  | set = department question; with course_id NULL |
 | `course_id` | int | yes | MUL |  | set = question for one specific course |
 | `created_by` | int | yes |  |  | author (HOD/lecturer); NULL for the standard set |
@@ -313,6 +314,20 @@ here, only those students may evaluate it (overriding `courses.course_audience`)
 | `evaluation_id` | int | no | MUL |  |  |
 | `question_id` | int | no | MUL |  |  |
 | `response_value` | tinyint | no |  |  |  |
+| `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+### `response_answers`
+
+Non-rating answers (number, yes/no, written). Ratings stay in `responses`, so
+averages are never affected by these.
+
+| Column | Type | Null | Key | Default | Notes |
+|---|---|---|---|---|---|
+| `id` | int | no | PRI |  | auto_increment |
+| `evaluation_id` | int | no |  |  | part of UNIQUE(evaluation_id, question_id) |
+| `question_id` | int | no | MUL |  |  |
+| `answer_number` | smallint | yes |  |  | number answers; yes/no stored as 1/0 |
+| `answer_text` | text | yes |  |  | written answers |
 | `created_at` | timestamp | no |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 ### `evaluation_completions`

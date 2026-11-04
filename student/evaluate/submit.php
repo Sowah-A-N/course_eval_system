@@ -11,7 +11,7 @@
  * - Load all active evaluation questions grouped by category
  * - Rating scale (1-5) for each question
  * - CSRF protection
- * - Form validation (all questions required)
+ * - Form validation (course questions required; administrative + written answers optional)
  * - Database transaction (atomic operation)
  * - Record an anonymous completion so the same evaluation can't be submitted twice
  * - Redirect to success page
@@ -211,7 +211,7 @@ if ($already_done) {
 // Administrative questions stay global.
 if ($scope === 'course') {
     $stmt_q = mysqli_prepare($conn,
-        "SELECT question_id, question_text, category, display_order
+        "SELECT question_id, question_text, category, display_order, answer_type
          FROM evaluation_questions
          WHERE is_active = 1 AND scope = 'course'
            AND (
@@ -223,7 +223,7 @@ if ($scope === 'course') {
     mysqli_stmt_bind_param($stmt_q, "ii", $course_dept_id, $course_pk);
 } else {
     $stmt_q = mysqli_prepare($conn,
-        "SELECT question_id, question_text, category, display_order
+        "SELECT question_id, question_text, category, display_order, answer_type
          FROM evaluation_questions
          WHERE is_active = 1 AND scope = 'administrative'
            AND department_id IS NULL AND course_id IS NULL
@@ -235,6 +235,10 @@ $questions = [];
 $questions_by_category = [];
 
 while ($row = mysqli_fetch_assoc($result_questions)) {
+    // 3.2 — required rules: administrative questions are all optional; on a
+    // course evaluation every question is required except written answers.
+    $row['answer_type'] = $row['answer_type'] ?: 'rating';
+    $row['required'] = ($scope === 'course' && $row['answer_type'] !== 'text');
     $questions[] = $row;
     $category = $row['category'];
     if (!isset($questions_by_category[$category])) {
@@ -258,26 +262,63 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $errors[] = 'Invalid security token. Please try again.';
     }
 
-    // Validate all questions are answered
-    $responses = [];
+    // Validate answers per question type (3.2). Ratings go to `responses`;
+    // number / yes-no / written answers go to `response_answers`.
+    $responses = [];      // question_id => rating 1-5
+    $extra_answers = [];  // question_id => ['number' => int|null, 'text' => string|null]
+    $missing_required = false;
     foreach ($questions as $question) {
-        $question_id = $question['question_id'];
-        $response_key = 'question_' . $question_id;
+        $question_id = (int)$question['question_id'];
+        $raw = $_POST['question_' . $question_id] ?? '';
+        $raw = is_string($raw) ? trim($raw) : '';
 
-        if (!isset($_POST[$response_key]) || empty($_POST[$response_key])) {
-            $errors[] = 'Please answer all questions.';
-            break;
+        if ($raw === '') {
+            if ($question['required']) {
+                $missing_required = true;
+            }
+            continue; // optional and left blank — nothing stored
         }
 
-        $response_value = intval($_POST[$response_key]);
-
-        // Validate rating is between 1 and 5
-        if ($response_value < RATING_MIN || $response_value > RATING_MAX) {
-            $errors[] = 'Invalid rating value. Please select a rating between 1 and 5.';
-            break;
+        switch ($question['answer_type']) {
+            case 'number':
+                if (!preg_match('/^\d+$/', $raw) || (int)$raw > ANSWER_NUMBER_MAX) {
+                    $errors[] = 'Please enter a whole number between 0 and ' . ANSWER_NUMBER_MAX . '.';
+                    break 2;
+                }
+                $extra_answers[$question_id] = ['number' => (int)$raw, 'text' => null];
+                break;
+            case 'yes_no':
+                if ($raw !== '1' && $raw !== '0') {
+                    $errors[] = 'Please answer Yes or No.';
+                    break 2;
+                }
+                $extra_answers[$question_id] = ['number' => (int)$raw, 'text' => null];
+                break;
+            case 'text':
+                $text = trim(strip_tags($raw));
+                if ($text === '') {
+                    break;
+                }
+                if (mb_strlen($text) > ANSWER_TEXT_MAX) {
+                    $errors[] = 'Written answers must be ' . ANSWER_TEXT_MAX . ' characters or fewer.';
+                    break 2;
+                }
+                $extra_answers[$question_id] = ['number' => null, 'text' => $text];
+                break;
+            default: // rating
+                $rv = (int)$raw;
+                if ($rv < RATING_MIN || $rv > RATING_MAX) {
+                    $errors[] = 'Invalid rating value. Please select a rating between 1 and 5.';
+                    break 2;
+                }
+                $responses[$question_id] = $rv;
         }
-
-        $responses[$question_id] = $response_value;
+    }
+    if (empty($errors) && $missing_required) {
+        $errors[] = 'Please answer all required questions.';
+    }
+    if (empty($errors) && empty($responses) && empty($extra_answers)) {
+        $errors[] = 'Please answer at least one question before submitting.';
     }
 
     // If no errors, submit evaluation
@@ -344,6 +385,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
             mysqli_stmt_close($stmt_response);
+
+            // Non-rating answers (number, yes/no, written) — 3.2.
+            if (!empty($extra_answers)) {
+                $stmt_extra = mysqli_prepare($conn,
+                    "INSERT INTO response_answers (evaluation_id, question_id, answer_number, answer_text) VALUES (?, ?, ?, ?)");
+                if (!$stmt_extra) { throw new RuntimeException('Failed to prepare answer insert.'); }
+                foreach ($extra_answers as $question_id => $ans) {
+                    $num = $ans['number'];
+                    $txt = $ans['text'];
+                    mysqli_stmt_bind_param($stmt_extra, "iiis", $evaluation_id, $question_id, $num, $txt);
+                    if (!mysqli_stmt_execute($stmt_extra)) { throw new RuntimeException('Failed to insert an answer row.'); }
+                }
+                mysqli_stmt_close($stmt_extra);
+            }
 
             // Participation is already recorded by the completion row above; the
             // answers carry no student reference, so there is nothing to "mark used".
@@ -589,6 +644,45 @@ require_once '../../includes/header.php';
         line-height: 1.6;
     }
 
+    /* 3.2 — non-rating answer inputs */
+    .optional-tag {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 1px 8px;
+        border-radius: 10px;
+        background: #eef0f6;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .answer-input {
+        width: 100%;
+        max-width: 220px;
+        padding: 10px 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 15px;
+        font-family: inherit;
+    }
+
+    .answer-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .answer-text {
+        max-width: 100%;
+        resize: vertical;
+        min-height: 90px;
+    }
+
+    .yesno-scale .rating-option {
+        min-width: 120px;
+    }
+
     .progress-indicator {
         background: white;
         padding: 15px 20px;
@@ -677,7 +771,12 @@ require_once '../../includes/header.php';
         <strong>1</strong> = Very Poor | <strong>2</strong> = Poor | <strong>3</strong> = Fair | <strong>4</strong> = Good | <strong>5</strong> = Excellent
         <br><br>
         Your responses are <strong>completely anonymous</strong> and will help improve the quality of this course.
-        Please answer all questions honestly and thoughtfully. Once submitted, your evaluation cannot be edited.
+        <?php if ($scope === 'administrative'): ?>
+            Every question here is optional — answer only about the services you actually used.
+        <?php else: ?>
+            Please answer every question (written answers are optional).
+        <?php endif; ?>
+        Answer honestly and thoughtfully. Once submitted, your evaluation cannot be edited.
     </div>
 
     <!-- Display Errors -->
@@ -712,30 +811,59 @@ require_once '../../includes/header.php';
             <div class="category-section">
                 <div class="category-header"><?php echo htmlspecialchars($category); ?></div>
 
-                <?php foreach ($category_questions as $question): ?>
-                    <div class="question-item">
-                        <div class="question-number">Question <?php echo $question_counter; ?></div>
+                <?php foreach ($category_questions as $question):
+                    $qid   = (int)$question['question_id'];
+                    $qtype = $question['answer_type'];
+                    $qreq  = $question['required'];
+                    $prev  = isset($_POST['question_' . $qid]) && is_string($_POST['question_' . $qid]) ? $_POST['question_' . $qid] : '';
+                ?>
+                    <div class="question-item" data-required="<?php echo $qreq ? '1' : '0'; ?>">
+                        <div class="question-number">
+                            Question <?php echo $question_counter; ?>
+                            <?php if (!$qreq): ?><span class="optional-tag">optional</span><?php endif; ?>
+                        </div>
                         <div class="question-text"><?php echo htmlspecialchars($question['question_text']); ?></div>
 
-                        <div class="rating-scale">
-                            <?php for ($rating = 1; $rating <= 5; $rating++): ?>
-                                <div class="rating-option">
-                                    <input
-                                        type="radio"
-                                        name="question_<?php echo $question['question_id']; ?>"
-                                        id="q<?php echo $question['question_id']; ?>_r<?php echo $rating; ?>"
-                                        value="<?php echo $rating; ?>"
-                                        class="rating-input"
-                                        required>
-                                    <label
-                                        for="q<?php echo $question['question_id']; ?>_r<?php echo $rating; ?>"
-                                        class="rating-label">
-                                        <span class="rating-value"><?php echo $rating; ?></span>
-                                        <span class="rating-text"><?php echo RATING_LABELS[$rating]; ?></span>
-                                    </label>
-                                </div>
-                            <?php endfor; ?>
-                        </div>
+                        <?php if ($qtype === 'yes_no'): ?>
+                            <div class="rating-scale yesno-scale">
+                                <?php foreach (['1' => 'Yes', '0' => 'No'] as $val => $lab): ?>
+                                    <div class="rating-option">
+                                        <input type="radio" name="question_<?php echo $qid; ?>" id="q<?php echo $qid; ?>_<?php echo $val; ?>"
+                                               value="<?php echo $val; ?>" class="rating-input" <?php echo $prev === (string)$val ? 'checked' : ''; ?> <?php echo $qreq ? 'required' : ''; ?>>
+                                        <label for="q<?php echo $qid; ?>_<?php echo $val; ?>" class="rating-label">
+                                            <span class="rating-value"><?php echo $lab; ?></span>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php elseif ($qtype === 'number'): ?>
+                            <input type="number" class="answer-input" name="question_<?php echo $qid; ?>" min="0" max="<?php echo ANSWER_NUMBER_MAX; ?>" step="1"
+                                   inputmode="numeric" value="<?php echo htmlspecialchars($prev); ?>" placeholder="Enter a number" <?php echo $qreq ? 'required' : ''; ?>>
+                        <?php elseif ($qtype === 'text'): ?>
+                            <textarea class="answer-input answer-text" name="question_<?php echo $qid; ?>" maxlength="<?php echo ANSWER_TEXT_MAX; ?>" rows="4"
+                                      placeholder="Type your answer (optional). Please don't include names or details that could identify you." <?php echo $qreq ? 'required' : ''; ?>><?php echo htmlspecialchars($prev); ?></textarea>
+                        <?php else: ?>
+                            <div class="rating-scale">
+                                <?php for ($rating = 1; $rating <= 5; $rating++): ?>
+                                    <div class="rating-option">
+                                        <input
+                                            type="radio"
+                                            name="question_<?php echo $qid; ?>"
+                                            id="q<?php echo $qid; ?>_r<?php echo $rating; ?>"
+                                            value="<?php echo $rating; ?>"
+                                            class="rating-input"
+                                            <?php echo $prev === (string)$rating ? 'checked' : ''; ?>
+                                            <?php echo $qreq ? 'required' : ''; ?>>
+                                        <label
+                                            for="q<?php echo $qid; ?>_r<?php echo $rating; ?>"
+                                            class="rating-label">
+                                            <span class="rating-value"><?php echo $rating; ?></span>
+                                            <span class="rating-text"><?php echo RATING_LABELS[$rating]; ?></span>
+                                        </label>
+                                    </div>
+                                <?php endfor; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <?php $question_counter++; ?>
                 <?php endforeach; ?>
@@ -763,29 +891,48 @@ require_once '../../includes/header.php';
     const answeredCount = document.getElementById('answered-count');
     const submitBtn = document.getElementById('submit-btn');
 
+    // 3.2 — questions can be ratings, yes/no, numbers or written answers, and
+    // some are optional. A question counts as answered when it has a value.
+    const questionItems = Array.from(form.querySelectorAll('.question-item'));
+
+    function isAnswered(item) {
+        const radios = item.querySelectorAll('input[type="radio"]');
+        if (radios.length) {
+            return Array.from(radios).some(function (r) { return r.checked; });
+        }
+        const field = item.querySelector('.answer-input');
+        return field ? field.value.trim() !== '' : false;
+    }
+
+    function answerCounts() {
+        let answered = 0, requiredMissing = 0;
+        questionItems.forEach(function (item) {
+            if (isAnswered(item)) {
+                answered++;
+            } else if (item.dataset.required === '1') {
+                requiredMissing++;
+            }
+        });
+        return { answered: answered, requiredMissing: requiredMissing };
+    }
+
     function updateProgress() {
-        const answeredQuestions = form.querySelectorAll('input[type="radio"]:checked').length;
-        const percentage = Math.round((answeredQuestions / totalQuestions) * 100);
+        const c = answerCounts();
+        const percentage = Math.round((c.answered / totalQuestions) * 100);
 
         progressBar.style.width = percentage + '%';
         progressPercent.textContent = percentage + '%';
-        answeredCount.textContent = answeredQuestions;
+        answeredCount.textContent = c.answered;
 
-        // Enable submit button only when all questions answered
-        if (answeredQuestions === totalQuestions) {
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
-        } else {
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.6';
-        }
+        // Submit is allowed once every required question is answered (and at
+        // least one answer has been given).
+        const ready = c.requiredMissing === 0 && c.answered > 0;
+        submitBtn.disabled = !ready;
+        submitBtn.style.opacity = ready ? '1' : '0.6';
     }
 
-    // Add event listeners to all radio buttons
-    const radioButtons = form.querySelectorAll('input[type="radio"]');
-    radioButtons.forEach(radio => {
-        radio.addEventListener('change', updateProgress);
-    });
+    form.addEventListener('change', updateProgress);
+    form.addEventListener('input', updateProgress);
 
     // Initialize progress
     updateProgress();
@@ -813,11 +960,16 @@ require_once '../../includes/header.php';
 
     // Form submission confirmation
     form.addEventListener('submit', function(e) {
-        const answeredQuestions = form.querySelectorAll('input[type="radio"]:checked').length;
+        const c = answerCounts();
 
-        if (answeredQuestions < totalQuestions) {
+        if (c.requiredMissing > 0) {
             e.preventDefault();
-            alert('Please answer all ' + totalQuestions + ' questions before submitting.');
+            alert('Please answer all required questions before submitting (' + c.requiredMissing + ' left).');
+            return false;
+        }
+        if (c.answered === 0) {
+            e.preventDefault();
+            alert('Please answer at least one question before submitting.');
             return false;
         }
 
@@ -841,9 +993,9 @@ require_once '../../includes/header.php';
     window.addEventListener('beforeunload', function(e) {
         if (submitted) return;   // Normal submit in progress — no warning
 
-        const answeredQuestions = form.querySelectorAll('input[type="radio"]:checked').length;
+        const answeredQuestions = answerCounts().answered;
 
-        if (answeredQuestions > 0 && answeredQuestions < totalQuestions) {
+        if (answeredQuestions > 0) {
             e.preventDefault();
             e.returnValue = 'You have unsaved responses. Are you sure you want to leave?';
             return e.returnValue;
@@ -862,8 +1014,8 @@ require_once '../../includes/header.php';
         submitBtn.style.opacity = '0.6';
         submitBtn.style.cursor = 'not-allowed';
         // Disable all radio inputs so the form looks and feels locked
-        form.querySelectorAll('input[type="radio"]').forEach(function(r) {
-            r.disabled = true;
+        form.querySelectorAll('input, textarea').forEach(function(r) {
+            if (r.type !== 'hidden') r.disabled = true;
         });
     }
 </script>

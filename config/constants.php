@@ -112,6 +112,19 @@ define('RATING_MIN', 1);
 define('RATING_MAX', 5);
 
 /**
+ * Answer types (feature 3.2). Ratings are stored in `responses`; the others in
+ * `response_answers` (yes/no as 1/0).
+ */
+define('ANSWER_TYPES', [
+    'rating' => 'Rating (1–5)',
+    'number' => 'Number',
+    'yes_no' => 'Yes / No',
+    'text'   => 'Written answer',
+]);
+define('ANSWER_NUMBER_MAX', 50);    // upper bound for number answers (e.g. times met)
+define('ANSWER_TEXT_MAX', 1000);    // max characters for written answers
+
+/**
  * Rating Labels
  */
 define('RATING_LABELS', [

@@ -37,10 +37,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "SELECT COALESCE(MAX(display_order),999)+1 AS n FROM evaluation_questions WHERE department_id=" . $department_id . " AND course_id IS NULL"))['n'];
             $cat = 'Department Questions';
             $scope = 'course';
+            $atype = array_key_exists($_POST['answer_type'] ?? '', ANSWER_TYPES) ? $_POST['answer_type'] : 'rating';
             $stmt = mysqli_prepare($conn,
-                "INSERT INTO evaluation_questions (question_text,category,scope,display_order,is_active,department_id,course_id,created_by)
-                 VALUES (?,?,?,?,1,?,NULL,?)");
-            mysqli_stmt_bind_param($stmt, "sssiii", $text, $cat, $scope, $ord, $department_id, $hod_id);
+                "INSERT INTO evaluation_questions (question_text,category,scope,answer_type,display_order,is_active,department_id,course_id,created_by)
+                 VALUES (?,?,?,?,?,1,?,NULL,?)");
+            mysqli_stmt_bind_param($stmt, "ssssiii", $text, $cat, $scope, $atype, $ord, $department_id, $hod_id);
             $ok = mysqli_stmt_execute($stmt);
             mysqli_stmt_close($stmt);
             $notice = $ok ? 'Question added.' : 'Could not add the question.';
@@ -79,7 +80,7 @@ if (isset($_SESSION['q_notice'])) {
 }
 
 $questions = [];
-$stmt = mysqli_prepare($conn, "SELECT question_id, question_text, display_order, is_active FROM evaluation_questions WHERE department_id=? AND course_id IS NULL ORDER BY display_order, question_id");
+$stmt = mysqli_prepare($conn, "SELECT question_id, question_text, display_order, is_active, answer_type FROM evaluation_questions WHERE department_id=? AND course_id IS NULL ORDER BY display_order, question_id");
 mysqli_stmt_bind_param($stmt, "i", $department_id);
 mysqli_stmt_execute($stmt);
 $res = mysqli_stmt_get_result($stmt);
@@ -119,6 +120,14 @@ td{padding:11px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
         <?php csrf_token_input(); ?>
         <input type="hidden" name="action" value="add">
         <textarea name="question_text" class="form-textarea" required placeholder="e.g., The course materials were relevant to our department's field."></textarea>
+        <div style="margin-top:10px">
+            <label class="muted">Answer type:&nbsp;</label>
+            <select name="answer_type" style="padding:8px;border:2px solid #e0e0e0;border-radius:5px">
+                <?php foreach (ANSWER_TYPES as $atk => $atl): ?>
+                    <option value="<?php echo $atk; ?>"><?php echo htmlspecialchars($atl); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
         <div style="margin-top:10px"><button type="submit" class="btn btn-primary">Add Question</button></div>
     </form>
     <?php if (empty($questions)): ?>
@@ -129,7 +138,7 @@ td{padding:11px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
             <tbody>
             <?php foreach ($questions as $q): ?>
                 <tr>
-                    <td><?php echo htmlspecialchars($q['question_text']); ?></td>
+                    <td><?php echo htmlspecialchars($q['question_text']); ?><?php if (($q['answer_type'] ?? 'rating') !== 'rating'): ?> <span class="muted">(<?php echo htmlspecialchars(ANSWER_TYPES[$q['answer_type']]); ?>)</span><?php endif; ?></td>
                     <td><span class="pill <?php echo $q['is_active'] ? 'on' : 'off'; ?>"><?php echo $q['is_active'] ? 'Active' : 'Inactive'; ?></span></td>
                     <td style="text-align:right;white-space:nowrap">
                         <form method="POST" style="display:inline">
